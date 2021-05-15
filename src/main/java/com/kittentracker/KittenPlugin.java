@@ -33,6 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
 import net.runelite.api.widgets.Widget;
+import net.runelite.api.widgets.WidgetID;
 import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.Notifier;
 import net.runelite.client.callback.ClientThread;
@@ -75,8 +76,13 @@ public class KittenPlugin extends Plugin {
 
     private static final int WARNING_HUNGRY_IN_S = 180; // 3 MINUTES
     private static final int WARNING_VERY_HUNGRY_IN_S = 180; // 3 MINUTES
-    public static final int ATTENTION_TIMER_FIRST_WARNING_IN_S = 420; // 7 MINUTES
-    public static final int ATTENTION_TIMER_SECOND_WARNING_IN_S = 420; // 7 MINUTES
+    private static final int ATTENTION_TIMER_FIRST_WARNING_IN_S = 420; // 7 MINUTES
+    private static final int ATTENTION_TIMER_SECOND_WARNING_IN_S = 420; // 7 MINUTES
+
+    private static final int DIALOG_NOTIFICATION_GROUP_ID = 229;
+    private static final int WIDGET_ID_DIALOG_PLAYER_TEXT = 3;
+    private static final int WIDGET_ID_DIALOG_NOTIFICATION_TEXT = 0;
+
 
     private boolean ready;
     private Instant kittenSpawned;
@@ -455,8 +461,7 @@ public class KittenPlugin extends Plugin {
 
     @Subscribe
     public void onGameTick(GameTick tick) {
-        /* // TODO read Player dialogs
-		Widget playerDialog = client.getWidget(WidgetInfo.DIALOG_PLAYER_TEXT);
+		Widget playerDialog = client.getWidget(WidgetID.DIALOG_PLAYER_GROUP_ID, WIDGET_ID_DIALOG_PLAYER_TEXT);
 
 		if (playerDialog != null)
 		{
@@ -478,7 +483,7 @@ public class KittenPlugin extends Plugin {
 				}
 			}
 		}
-		Widget notificationDialog = client.getWidget(WidgetInfo.DIALOG_NOTIFICATION_TEXT);
+		Widget notificationDialog = client.getWidget(DIALOG_NOTIFICATION_GROUP_ID, WIDGET_ID_DIALOG_NOTIFICATION_TEXT);
 		if (notificationDialog != null)
 		{
 			String notificationText = Text.removeTags(notificationDialog.getText()); // remove color and linebreaks
@@ -495,8 +500,6 @@ public class KittenPlugin extends Plugin {
 				getFollowerID();
 			}
 		}
-
-         */
     }
 
     @Subscribe
