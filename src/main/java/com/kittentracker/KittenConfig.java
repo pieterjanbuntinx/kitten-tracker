@@ -148,6 +148,22 @@ public interface KittenConfig extends Config {
     )
     void felineId(int id);
 
+    @ConfigItem(
+            keyName = "lastAttentionType",
+            name = "",
+            description = "",
+            hidden = true
+    )
+    default KittenPlugin.KittenAttentionType lastAttentionType() {
+        return null;
+    }
+
+    @ConfigItem(
+            keyName = "lastAttentionType",
+            name = "",
+            description = ""
+    )
+    void lastAttentionType(KittenPlugin.KittenAttentionType lastAttentionType);
 
 }
 

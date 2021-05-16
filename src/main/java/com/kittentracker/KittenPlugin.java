@@ -26,15 +26,14 @@
 package com.kittentracker;
 
 import com.google.inject.Provides;
-
-import javax.inject.Inject;
-
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
-import net.runelite.api.events.*;
+import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.GameTick;
+import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetID;
-import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.Notifier;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
@@ -46,6 +45,7 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.infobox.InfoBoxManager;
 import net.runelite.client.util.Text;
 
+import javax.inject.Inject;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -56,15 +56,16 @@ import java.time.temporal.ChronoUnit;
 )
 public class KittenPlugin extends Plugin {
     private static final int VAR_PLAYER_FOLLOWER = 447;
+    private static final int WIDGET_ID_DIALOG_NOTIFICATION_GROUP_ID = 229;
+    private static final int WIDGET_ID_DIALOG_PLAYER_TEXT = 4;
+    private static final int WIDGET_ID_DIALOG_NOTIFICATION_TEXT = 0;
 
-    private static final String CHAT_CAT_STROKE = "That cat sure loves to be stroked.";
-    private static final String CHAT_CAT_BALLOFWOOL = "That kitten loves to play with that ball of wool. I think it is its favourite.";
-    private static final String CHAT_CAT_GROWN = "Your kitten has grown into a healthy cat that can hunt for itself.";
-    private static final String CHAT_CAT_OVERGROWN = "Your cat has grown into a mighty feline, but it will no longer be able to chase vermin.";
-    private static final String TOOLTIP_APPROXIMATE_TIME_LEFT_TO_GROW_INTO_A_CAT = "Approximate time left to grow into a cat";
-    private static final String TOOLTIP_APPROXIMATE_TIME_LEFT_TO_TRANSFORM_INTO_AN_OVERGROWN_CAT = "Approximate time left to transform into an overgrown cat";
-    private static final String TOOLTIP_TIME_UNTIL_YOUR_KITTEN_LEAVES_YOU_FOR_BEING_UNDERFED = "time until your kitten leaves you for being underfed";
-    private static final String TOOLTIP_APPROXIMATE_TIME_UNTIL_YOUR_KITTEN_LEAVES_YOU_FOR_BEING_NEGLECTFUL = "Approximate time until your kitten leaves you for being neglectful";
+    private static final String DIALOG_CAT_STROKE = "That cat sure loves to be stroked.";
+    private static final String DIALOG_CAT_BALL_OF_WOOL = "That kitten loves to play with that ball of wool. I think itis its favourite.";
+    private static final String DIALOG_CAT_GROWN = "Your kitten has grown into a healthy cat that can hunt for itself.";
+    private static final String DIALOG_CAT_OVERGROWN = "Your cat has grown into a mighty feline, but it will no longer be able to chase vermin.";
+
+    private static final String CHAT_STROKE_CAT = "You softly stroke your cat.";
     private static final String CHAT_THE_KITTEN_GOBBLES_UP_THE_FISH = "The kitten gobbles up the fish.";
     private static final String CHAT_THE_KITTEN_LAPS_UP_THE_MILK = "The kitten laps up the milk.";
     private static final String CHAT_YOUR_KITTEN_IS_HUNGRY = "Your kitten is hungry.";
@@ -74,26 +75,70 @@ public class KittenPlugin extends Plugin {
     private static final String CHAT_YOUR_KITTEN_GOT_LONELY_AND_RAN_OFF = "Your kitten got lonely and ran off.";
     private static final String CHAT_THE_CAT_HAS_RUN_AWAY = "The cat has run away.";
 
-    private static final int WARNING_HUNGRY_IN_S = 180; // 3 MINUTES
-    private static final int WARNING_VERY_HUNGRY_IN_S = 180; // 3 MINUTES
-    private static final int ATTENTION_TIMER_FIRST_WARNING_IN_S = 420; // 7 MINUTES
-    private static final int ATTENTION_TIMER_SECOND_WARNING_IN_S = 420; // 7 MINUTES
+    private static final String TOOLTIP_APPROXIMATE_TIME_LEFT_TO_GROW_INTO_A_CAT = "Approximate time left to grow into a cat";
+    private static final String TOOLTIP_APPROXIMATE_TIME_LEFT_TO_TRANSFORM_INTO_AN_OVERGROWN_CAT = "Approximate time left to transform into an overgrown cat";
+    private static final String TOOLTIP_TIME_UNTIL_YOUR_KITTEN_LEAVES_YOU_FOR_BEING_UNDERFED = "Time until your kitten leaves you for being underfed";
+    private static final String TOOLTIP_APPROXIMATE_TIME_UNTIL_YOUR_KITTEN_LEAVES_YOU_FOR_BEING_NEGLECTFUL = "Approximate time until your kitten leaves you for being neglectful";
 
-    private static final int DIALOG_NOTIFICATION_GROUP_ID = 229;
-    private static final int WIDGET_ID_DIALOG_PLAYER_TEXT = 3;
-    private static final int WIDGET_ID_DIALOG_NOTIFICATION_TEXT = 0;
+    private static final int HUNGRY_FIRST_WARNING_TIME_LEFT_IN_SECONDS = 6 * 60; // 6 MINUTES
+    private static final int HUNGRY_FINAL_WARNING_TIME_LEFT_IN_SECONDS = 3 * 60; // 3 MINUTES
+    private static final int HUNGRY_TIME_BEFORE_FIRST_WARNING_IN_MINUTES = 24; // MINUTES
+    private static final int HUNGRY_TIME_BEFORE_FINAL_WARNING_IN_MINUTES = 27; // MINUTES
+    private static final int HUNGRY_TIME_BEFORE_KITTEN_RUNS_AWAY_IN_SECONDS = 30 * 60; // 30 MINUTES
 
+    private static final int ATTENTION_FIRST_WARNING_TIME_LEFT_IN_SECONDS = 14 * 60; // 14 MINUTES
+    private static final int ATTENTION_FINAL_WARNING_TIME_LEFT_IN_SECONDS = 7 * 60; // 7 MINUTES
+    private static final int ATTENTION_TIME_NEW_KITTEN_IN_SECONDS = 25 * 60; // 25 MINUTES
+    private static final int ATTENTION_TIME_SINGLE_STROKE_IN_SECONDS = 18 * 60; // 18 MINUTES
+    private static final int ATTENTION_TIME_MULTIPLE_STROKES_IN_SECONDS = 25 * 60; // 25 MINUTES
+    private static final int ATTENTION_TIME_BALL_OF_WOOL_IN_SECONDS = 51 * 60; // 51 MINUTES
+    private static final int ATTENTION_TIME_FROM_WARNING_TO_RUNNING_AWAY_IN_SECONDS = (7 + 7) * 60; // 14 MINUTES
+    private static final int ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_NEW_KITTEN_IN_SECONDS = ATTENTION_TIME_NEW_KITTEN_IN_SECONDS + ATTENTION_TIME_FROM_WARNING_TO_RUNNING_AWAY_IN_SECONDS; // 32 MINUTES
+    private static final int ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS = ATTENTION_TIME_SINGLE_STROKE_IN_SECONDS + ATTENTION_TIME_FROM_WARNING_TO_RUNNING_AWAY_IN_SECONDS; // 32 MINUTES
+    private static final int ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_MULTIPLE_STROKES_IN_SECONDS = ATTENTION_TIME_MULTIPLE_STROKES_IN_SECONDS + ATTENTION_TIME_FROM_WARNING_TO_RUNNING_AWAY_IN_SECONDS; // 39 MINUTES
+    private static final int ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_BALL_OF_WOOL_IN_SECONDS = ATTENTION_TIME_BALL_OF_WOOL_IN_SECONDS + ATTENTION_TIME_FROM_WARNING_TO_RUNNING_AWAY_IN_SECONDS; // 65 MINUTES
+
+    private static final int TIME_TO_ADULTHOOD_IN_SECONDS = 3 * 3600; // 3 HOURS
+    private static final int TIME_TILL_OVERGROWN_IN_SECONDS = (int) (2.5 * 3600); // 2-3 HOURS -> 2.5 HOURS
+
+    enum KittenAttentionType {
+        NEW_KITTEN(0, ATTENTION_TIME_NEW_KITTEN_IN_SECONDS),
+        SINGLE_STROKE(1, ATTENTION_TIME_SINGLE_STROKE_IN_SECONDS),
+        MULTIPLE_STROKES(2, ATTENTION_TIME_MULTIPLE_STROKES_IN_SECONDS),
+        BALL_OF_WOOL(3, ATTENTION_TIME_BALL_OF_WOOL_IN_SECONDS);
+
+        private final int id;
+        private final int attentionTime;
+
+        KittenAttentionType(int id, int attentionTime) {
+            this.id = id;
+            this.attentionTime = attentionTime;
+        }
+
+        int getId() {
+            return id;
+        }
+
+        int getAttentionTime() {
+            return attentionTime;
+        }
+
+        int getTimeBeforeKittenRunsAway() {
+            return attentionTime + ATTENTION_TIME_FROM_WARNING_TO_RUNNING_AWAY_IN_SECONDS;
+        }
+    }
 
     private boolean ready;
     private Instant kittenSpawned;
     private Instant catSpawned;
     private Instant kittenFed;
     private Instant kittenAttention;
-    private int timeSpendGrowing;
-    private int timeNeglected;
-    private int timeHungry;
+    private int timeSpendGrowing = 0;
+    private int timeNeglected = 0;
+    private int timeHungry = 0;
     private int followerID = 0;
     private int previousFeline = 0;
+    private KittenAttentionType lastAttentionType = KittenAttentionType.NEW_KITTEN;
 
     private boolean cat = false; // npcId 1619-1625
     private boolean lazycat = false; // npcId 1626-1632
@@ -102,28 +147,23 @@ public class KittenPlugin extends Plugin {
     private boolean overgrown = false; // npcId 5598-5604
     private boolean nonFeline = false;
 
+    @Inject
+    private Client client;
+    @Inject
+    private Notifier notifier;
+    @Inject
+    private KittenConfig config;
+    @Inject
+    private ClientThread clientThread;
+    @Inject
+    private ItemManager itemManager;
+    @Inject
+    private InfoBoxManager infoBoxManager;
+
     @Provides
     KittenConfig provideConfig(ConfigManager configManager) {
         return configManager.getConfig(KittenConfig.class);
     }
-
-    @Inject
-    private Client client;
-
-    @Inject
-    private Notifier notifier;
-
-    @Inject
-    private KittenConfig config;
-
-    @Inject
-    private ClientThread clientThread;
-
-    @Inject
-    private ItemManager itemManager;
-
-    @Inject
-    private InfoBoxManager infoBoxManager;
 
     @Override
     public void startUp() {
@@ -161,34 +201,32 @@ public class KittenPlugin extends Plugin {
     }
 
     private void getFollowerID() {
-        StringBuilder s = new StringBuilder(Integer.toBinaryString(client.getVarpValue(VAR_PLAYER_FOLLOWER)));
-        while (s.length() < 32) {
-            s.insert(0, "0");
-        }
+        int followerVarPlayerValue = client.getVarpValue(VAR_PLAYER_FOLLOWER);
 
-        // followerID is the first 2 octets converted into decimals
-        followerID = Integer.parseInt(s.substring(0, 16), 2);
+        // followerID is the first 2 bytes
+        followerID = followerVarPlayerValue >> 16;
         if (followerID != 0) //Varbit needs to fill up first after logging in
         {
+            previousFeline = config.felineId();
             newFollower();
         }
 
     }
 
     private void newFollower() {
-        if (followerID >= 1619 && followerID <= 1625) {
+        if (followerID >= NpcID.CAT_1619 && followerID <= NpcID.HELLCAT) {
             cat = true;
         }
-        if (followerID >= 1626 && followerID <= 1632) {
+        if (followerID >= NpcID.LAZY_CAT && followerID <= NpcID.LAZY_HELLCAT) {
             lazycat = true;
         }
-        if (followerID >= 5584 && followerID <= 5590) {
+        if (followerID >= NpcID.WILY_CAT && followerID <= NpcID.WILY_HELLCAT) {
             wilycat = true;
         }
-        if (followerID >= 5591 && followerID <= 5597) {
+        if (followerID >= NpcID.KITTEN_5591 && followerID <= NpcID.HELLKITTEN) {
             kitten = true;
         }
-        if (followerID >= 5598 && followerID <= 5604) {
+        if (followerID >= NpcID.OVERGROWN_CAT && followerID <= NpcID.OVERGROWN_HELLCAT) {
             overgrown = true;
         }
 
@@ -203,35 +241,34 @@ public class KittenPlugin extends Plugin {
                 timeNeglected = config.secondsNeglected();
                 timeHungry = config.secondsHungry();
                 kittenSpawned = Instant.now();
-                addKittenGrowthBox((14400 - timeSpendGrowing));
-                addHungryTimer(1800 - timeHungry);
-                addAttentionTimer(1800 - timeNeglected);
-            }
-            if (followerID != previousFeline) // new kitten, new timer
+                lastAttentionType = config.lastAttentionType();
+                addKittenGrowthBox(TIME_TO_ADULTHOOD_IN_SECONDS - timeSpendGrowing);
+                addHungryTimer(HUNGRY_TIME_BEFORE_KITTEN_RUNS_AWAY_IN_SECONDS - timeHungry);
+                addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS - timeNeglected);
+            } else // new kitten, new timer
             {
                 config.secondsAlive(0);
                 config.secondsHungry(0);
                 config.secondsNeglected(0);
+                config.lastAttentionType(KittenAttentionType.NEW_KITTEN);
 
                 kittenSpawned = Instant.now();
                 kittenFed = Instant.now();
                 kittenAttention = Instant.now();
-                addKittenGrowthBox(14400);
-                addHungryTimer(1800);
-                addAttentionTimer(1800);
+                addKittenGrowthBox(TIME_TO_ADULTHOOD_IN_SECONDS);
+                addHungryTimer(HUNGRY_TIME_BEFORE_KITTEN_RUNS_AWAY_IN_SECONDS);
+                addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_MULTIPLE_STROKES_IN_SECONDS);
             }
-
         }
         if (cat) {
             if (followerID == previousFeline) // The same cat is back!
             {
                 timeSpendGrowing = config.secondsAlive();
-                addKittenGrowthBox((14400 - timeSpendGrowing));
-            }
-            if (followerID != previousFeline) // new cat, new timer
+                addKittenGrowthBox((TIME_TO_ADULTHOOD_IN_SECONDS + TIME_TILL_OVERGROWN_IN_SECONDS - timeSpendGrowing));
+            } else // new cat, new timer
             {
                 catSpawned = Instant.now();
-                addKittenGrowthBox(14400);
+                addKittenGrowthBox(TIME_TILL_OVERGROWN_IN_SECONDS);
             }
         }
     }
@@ -274,9 +311,8 @@ public class KittenPlugin extends Plugin {
                 Duration timeFed = Duration.between(kittenFed, Instant.now());
                 int secondsFed = Math.toIntExact(timeFed.getSeconds());
                 config.secondsHungry(secondsFed);
-            }
-            if (kittenFed == null) {
-                //kitten was not fed, so we add the time it has been out to the time it was already hungry for
+            } else {
+                // kitten was not fed, so we add the time it has been out to the time it was already hungry for
                 Duration timeSinceSpawn = Duration.between(kittenSpawned, Instant.now());
                 int secondsSinceSpawn = Math.toIntExact(timeSinceSpawn.getSeconds());
                 config.secondsHungry(timeHungry + secondsSinceSpawn);
@@ -286,16 +322,13 @@ public class KittenPlugin extends Plugin {
                 Duration timeAttention = Duration.between(kittenAttention, Instant.now());
                 int secondsAttention = Math.toIntExact(timeAttention.getSeconds());
                 config.secondsNeglected(secondsAttention);
-            }
-
-            if (kittenAttention == null) {
-                //kitten was not paid attention, so we add the time it has been out to the time it was already neglected for
+            } else {
+                // kitten was not paid attention, so we add the time it has been out to the time it was already neglected for
                 Duration timeSinceSpawn = Duration.between(kittenSpawned, Instant.now());
                 int secondsSinceSpawn = Math.toIntExact(timeSinceSpawn.getSeconds());
                 config.secondsNeglected(timeNeglected + secondsSinceSpawn);
             }
-
-
+            config.lastAttentionType(lastAttentionType);
         }
 
         if (cat) {
@@ -306,7 +339,6 @@ public class KittenPlugin extends Plugin {
             catSpawned = null;
         }
     }
-
 
     private void addKittenGrowthBox(int seconds) {
         if (seconds <= 0) {
@@ -333,8 +365,7 @@ public class KittenPlugin extends Plugin {
                 timer.setTooltip(TOOLTIP_APPROXIMATE_TIME_LEFT_TO_TRANSFORM_INTO_AN_OVERGROWN_CAT);
                 infoBoxManager.addInfoBox(timer);
             }
-        }
-
+        } // TODO use something else than infobox. Infoboxes with timers have a max time of 60 minutes
     }
 
     private void addHungryTimer(int seconds) {
@@ -342,13 +373,12 @@ public class KittenPlugin extends Plugin {
             return;
         }
         infoBoxManager.removeIf(t -> t instanceof KittenHungryTimer);
-        KittenHungryTimer timer = new KittenHungryTimer(itemManager.getImage(1552), this, Duration.ofSeconds(seconds));
-
+        KittenHungryTimer timer = new KittenHungryTimer(itemManager.getImage(ItemID.SEASONED_SARDINE), this, Duration.ofSeconds(seconds));
 
         if (config.kittenHungryBox() & kitten) {
             timer.setTooltip(TOOLTIP_TIME_UNTIL_YOUR_KITTEN_LEAVES_YOU_FOR_BEING_UNDERFED);
             infoBoxManager.addInfoBox(timer);
-        }
+        } // TODO use something else than infobox. Infoboxes with timers have a max time of 60 minutes
     }
 
     private void addAttentionTimer(int seconds) {
@@ -361,79 +391,99 @@ public class KittenPlugin extends Plugin {
         if (config.kittenAttentionBox() & kitten) {
             timer.setTooltip(TOOLTIP_APPROXIMATE_TIME_UNTIL_YOUR_KITTEN_LEAVES_YOU_FOR_BEING_NEGLECTFUL);
             infoBoxManager.addInfoBox(timer);
-        }
+        } // TODO use something else than infobox. Infoboxes with timers have a max time of 60 minutes
     }
 
     @Subscribe
     public void onChatMessage(ChatMessage event) {
-        if (event.getType() == ChatMessageType.GAMEMESSAGE) {
-            String message = Text.removeTags(event.getMessage());
+        if (event.getType() != ChatMessageType.GAMEMESSAGE) {
+            return;
+        }
+        String message = Text.removeTags(event.getMessage());
 
-            if (message.equals(CHAT_THE_KITTEN_GOBBLES_UP_THE_FISH) || message.equals(CHAT_THE_KITTEN_LAPS_UP_THE_MILK)) {
+        switch (message) {
+            case CHAT_STROKE_CAT: {
+                if (kittenAttention != null) { // if kitten has had attention within the time since spawn
+                    long timeSinceLastAttentionSeconds = Duration.between(kittenAttention, Instant.now()).toMillis() / 1000 + timeNeglected;
+
+                    // max time depending on whether previous stroke already was a single stroke or a multistroke
+                    int maxTimePastForMultiStrokeSeconds = -1;
+                    if (lastAttentionType != null) {
+                        switch (lastAttentionType) {
+                            case SINGLE_STROKE:
+                            case MULTIPLE_STROKES:
+                                maxTimePastForMultiStrokeSeconds = lastAttentionType.getAttentionTime();
+                        }
+                    }
+
+                    // check if is valid multistroke
+                    if (timeSinceLastAttentionSeconds < maxTimePastForMultiStrokeSeconds) {
+                        if (config.kittenAttentionBox()) {
+                            addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_MULTIPLE_STROKES_IN_SECONDS);
+                        }
+                        lastAttentionType = KittenAttentionType.MULTIPLE_STROKES;
+                    } else { // set timer to 18 mins
+                        if (config.kittenAttentionBox()) {
+                            addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS);
+                        }
+                        lastAttentionType = KittenAttentionType.SINGLE_STROKE;
+                    }
+                } else { // set timer to 18 mins
+                    if (config.kittenAttentionBox()) {
+                        addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS);
+                    }
+                    lastAttentionType = KittenAttentionType.SINGLE_STROKE;
+                }
+                kittenAttention = Instant.now();
+                timeNeglected = 0;
+            }
+            case CHAT_THE_KITTEN_GOBBLES_UP_THE_FISH:
+            case CHAT_THE_KITTEN_LAPS_UP_THE_MILK: {
                 kittenFed = Instant.now();
                 if (config.kittenHungryBox()) {
-                    addHungryTimer(1800);
+                    addHungryTimer(HUNGRY_TIME_BEFORE_KITTEN_RUNS_AWAY_IN_SECONDS);
                 }
+                timeHungry = 0;
             }
-            if (message.equals(CHAT_YOUR_KITTEN_IS_HUNGRY)) // 6 minute warning
+            case CHAT_YOUR_KITTEN_IS_HUNGRY: // 6 minute warning
             {
                 if (config.kittenNotifications()) {
                     notifier.notify(message);
                 }
                 if (config.kittenHungryBox()) {
-                    addHungryTimer(WARNING_HUNGRY_IN_S);
+                    addHungryTimer(HUNGRY_FIRST_WARNING_TIME_LEFT_IN_SECONDS);
                 }
-                kittenFed = (Instant.now().minus(25, ChronoUnit.MINUTES));
+                kittenFed = (Instant.now().minus(HUNGRY_TIME_BEFORE_FIRST_WARNING_IN_MINUTES, ChronoUnit.MINUTES));
             }
-            if (message.equals(CHAT_YOUR_KITTEN_IS_VERY_HUNGRY)) {
+            case CHAT_YOUR_KITTEN_IS_VERY_HUNGRY: {
                 if (config.kittenNotifications()) {
                     notifier.notify(message);
                 }
                 if (config.kittenHungryBox()) {
-                    addHungryTimer(WARNING_VERY_HUNGRY_IN_S);
+                    addHungryTimer(HUNGRY_FINAL_WARNING_TIME_LEFT_IN_SECONDS);
                 }
-                kittenFed = (Instant.now().minus(28, ChronoUnit.MINUTES));
+                kittenFed = (Instant.now().minus(HUNGRY_TIME_BEFORE_FINAL_WARNING_IN_MINUTES, ChronoUnit.MINUTES));
             }
-            if (message.equals(CHAT_YOUR_KITTEN_WANTS_ATTENTION)) {
+            case CHAT_YOUR_KITTEN_WANTS_ATTENTION: {
                 if (config.kittenNotifications()) {
                     notifier.notify(message);
                 }
                 if (config.kittenAttentionBox()) {
-                    addAttentionTimer(ATTENTION_TIMER_FIRST_WARNING_IN_S);
+                    addAttentionTimer(ATTENTION_FIRST_WARNING_TIME_LEFT_IN_SECONDS);
                 }
-                kittenAttention = (Instant.now().minus(45, ChronoUnit.MINUTES));
+                kittenAttention = (Instant.now().minus(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS, ChronoUnit.MINUTES)); // used minimum time before kitten runs away, can be either 18, 25 or 51 minutes (+14 after warning)
             }
-            if (message.equals(CHAT_YOUR_KITTEN_REALLY_WANTS_ATTENTION)) {
+            case CHAT_YOUR_KITTEN_REALLY_WANTS_ATTENTION: {
                 if (config.kittenNotifications()) {
                     notifier.notify(message);
                 }
                 if (config.kittenAttentionBox()) {
-                    addAttentionTimer(ATTENTION_TIMER_SECOND_WARNING_IN_S);
+                    addAttentionTimer(ATTENTION_FINAL_WARNING_TIME_LEFT_IN_SECONDS);
                 }
-                kittenAttention = (Instant.now().minus(48, ChronoUnit.MINUTES));
+                kittenAttention = (Instant.now().minus(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS, ChronoUnit.MINUTES)); // used minimum time before kitten runs away, can be either 18, 25 or 51 minutes (+14 after warning)
             }
-            if (message.equals(CHAT_YOUR_KITTEN_GOT_LONELY_AND_RAN_OFF)) {
-                if (config.kittenNotifications()) {
-                    notifier.notify(message);
-                }
-                kittenSpawned = null;
-                kittenFed = null;
-                kittenAttention = null;
-                previousFeline = 0;
-                config.felineId(0); // in case the new kitten has the same NpcID. We need to track growth progress from the beginning.
-
-                infoBoxManager.removeIf(t -> t instanceof KittenGrowthTimer);
-                infoBoxManager.removeIf(t -> t instanceof KittenHungryTimer);
-                infoBoxManager.removeIf(t -> t instanceof KittenAttentionTimer);
-                followerID = 0;
-                cat = false;
-                lazycat = false;
-                wilycat = false;
-                kitten = false;
-                overgrown = false;
-                nonFeline = false;
-            }
-            if (message.equals(CHAT_THE_CAT_HAS_RUN_AWAY)) //shoo away option
+            case CHAT_YOUR_KITTEN_GOT_LONELY_AND_RAN_OFF:
+            case CHAT_THE_CAT_HAS_RUN_AWAY: //shoo away option
             {
                 if (config.kittenNotifications()) {
                     notifier.notify(message);
@@ -461,45 +511,55 @@ public class KittenPlugin extends Plugin {
 
     @Subscribe
     public void onGameTick(GameTick tick) {
-		Widget playerDialog = client.getWidget(WidgetID.DIALOG_PLAYER_GROUP_ID, WIDGET_ID_DIALOG_PLAYER_TEXT);
+        Widget playerDialog = client.getWidget(WidgetID.DIALOG_PLAYER_GROUP_ID, WIDGET_ID_DIALOG_PLAYER_TEXT);
 
-		if (playerDialog != null)
-		{
-			String playerText = Text.removeTags(playerDialog.getText()); //remove color and linebreaks
-			if (playerText.equals(CHAT_CAT_STROKE))
-			{
-				kittenAttention = Instant.now();
-				if (config.kittenAttentionBox())
-				{
-					addAttentionTimer(1800);
-				}
-			}
-			if (playerText.equals(CHAT_CAT_BALLOFWOOL))
-			{
-				kittenAttention = Instant.now();
-				if (config.kittenAttentionBox())
-				{
-					addAttentionTimer(3600);
-				}
-			}
-		}
-		Widget notificationDialog = client.getWidget(DIALOG_NOTIFICATION_GROUP_ID, WIDGET_ID_DIALOG_NOTIFICATION_TEXT);
-		if (notificationDialog != null)
-		{
-			String notificationText = Text.removeTags(notificationDialog.getText()); // remove color and linebreaks
-			if (notificationText.equals(CHAT_CAT_GROWN))
-			{
-				kitten = false;
-				getFollowerID();
-				infoBoxManager.removeIf(t -> t instanceof KittenAttentionTimer);
-				infoBoxManager.removeIf(t -> t instanceof KittenHungryTimer);
-			}
-			if (notificationText.equals(CHAT_CAT_OVERGROWN))
-			{
-				cat = false;
-				getFollowerID();
-			}
-		}
+        if (playerDialog != null) {
+            String playerText = Text.removeTags(playerDialog.getText()); //remove color and linebreaks
+            // only use chat messages to detect cat strokes
+            /*
+            if (playerText.equals(CHAT_CAT_STROKE)) {
+                long timeSinceLastAttentionSeconds = Duration.between(kittenAttention, Instant.now()).toMillis() / 1000;
+                if (previouslyStroked && kittenAttention != null && // if kitten was stroked repeatedly and stroke interval was less than 25 mins
+                        timeSinceLastAttentionSeconds < (previousWasMultiStroke ? ATTENTION_TIME_MULTIPLE_STROKES_IN_SECONDS : ATTENTION_TIME_SINGLE_STROKE_IN_SECONDS)) {    // (previous was also multistroke) or 18 mins (previous was single stroke)
+                    // than, set timer to 25 mins
+                    if (config.kittenAttentionBox()) {
+                        addAttentionTimer(ATTENTION_TIME_MULTIPLE_STROKES_IN_SECONDS);
+                    }
+                    previousWasMultiStroke = true;
+                    lastDialogWindowTime = Instant.now();
+                } else { // set timer to 18 mins
+                    previousWasMultiStroke = false;
+                    if (config.kittenAttentionBox()) {
+                        addAttentionTimer(ATTENTION_TIME_SINGLE_STROKE_IN_SECONDS);
+                    }
+                }
+                kittenAttention = Instant.now();
+                previouslyStroked = true;
+            }
+             */
+            if (playerText.equals(DIALOG_CAT_BALL_OF_WOOL)) {
+                kittenAttention = Instant.now();
+                if (config.kittenAttentionBox()) {
+                    addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_BALL_OF_WOOL_IN_SECONDS);
+                }
+                timeNeglected = 0;
+                lastAttentionType = KittenAttentionType.BALL_OF_WOOL;
+            }
+        }
+        Widget notificationDialog = client.getWidget(WIDGET_ID_DIALOG_NOTIFICATION_GROUP_ID, WIDGET_ID_DIALOG_NOTIFICATION_TEXT);
+        if (notificationDialog != null) {
+            String notificationText = Text.removeTags(notificationDialog.getText()); // remove color and linebreaks
+            if (notificationText.equals(DIALOG_CAT_GROWN)) {
+                kitten = false;
+                getFollowerID();
+                infoBoxManager.removeIf(t -> t instanceof KittenAttentionTimer);
+                infoBoxManager.removeIf(t -> t instanceof KittenHungryTimer);
+            }
+            if (notificationText.equals(DIALOG_CAT_OVERGROWN)) {
+                cat = false;
+                getFollowerID();
+            }
+        }
     }
 
     @Subscribe
@@ -514,7 +574,7 @@ public class KittenPlugin extends Plugin {
                     timeSpendGrowing = config.secondsAlive();
                     Duration timeAlive = Duration.between(kittenSpawned, Instant.now());
                     int secondsAlive = Math.toIntExact(timeAlive.getSeconds());
-                    addKittenGrowthBox(14400 - secondsAlive - timeSpendGrowing);
+                    addKittenGrowthBox(TIME_TO_ADULTHOOD_IN_SECONDS - secondsAlive - timeSpendGrowing);
                 }
             }
             if (event.getNewValue().equals("false")) {
@@ -530,7 +590,7 @@ public class KittenPlugin extends Plugin {
                     timeSpendGrowing = config.secondsAlive();
                     Duration timeAlive = Duration.between(catSpawned, Instant.now());
                     int secondsAlive = Math.toIntExact(timeAlive.getSeconds());
-                    addKittenGrowthBox(14400 - secondsAlive - timeSpendGrowing);
+                    addKittenGrowthBox(TIME_TILL_OVERGROWN_IN_SECONDS + TIME_TO_ADULTHOOD_IN_SECONDS - secondsAlive - timeSpendGrowing);
                 }
             }
             if (event.getNewValue().equals("false")) {
@@ -545,13 +605,13 @@ public class KittenPlugin extends Plugin {
                 if (kittenAttention != null) {
                     Duration timeAttention = Duration.between(kittenAttention, Instant.now());
                     int secondsAttention = Math.toIntExact(timeAttention.getSeconds());
-                    addAttentionTimer(1800 - secondsAttention);
+                    addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS - secondsAttention);
                 }
                 if (kittenAttention == null) {
                     timeNeglected = config.secondsNeglected();
                     Duration timeSinceSpawn = Duration.between(kittenSpawned, Instant.now());
-                    int secondsAttention = Math.toIntExact(timeSinceSpawn.getSeconds());
-                    addAttentionTimer(1800 - timeNeglected - secondsAttention);
+                    int secondsSinceSpawn = Math.toIntExact(timeSinceSpawn.getSeconds());
+                    addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS - timeNeglected - secondsSinceSpawn);
                 }
             }
             if (event.getNewValue().equals("false")) {
@@ -564,13 +624,13 @@ public class KittenPlugin extends Plugin {
                 if (kittenFed != null) {
                     Duration timeHungry = Duration.between(kittenFed, Instant.now());
                     int secondsHungry = Math.toIntExact(timeHungry.getSeconds());
-                    addHungryTimer(1800 - secondsHungry);
+                    addHungryTimer(HUNGRY_TIME_BEFORE_KITTEN_RUNS_AWAY_IN_SECONDS - secondsHungry);
                 }
                 if (kittenFed == null) {
                     timeHungry = config.secondsHungry();
                     Duration timeSinceSpawn = Duration.between(kittenSpawned, Instant.now());
                     int secondsSinceSpawn = Math.toIntExact(timeSinceSpawn.getSeconds());
-                    addHungryTimer(1800 - timeHungry - secondsSinceSpawn);
+                    addHungryTimer(HUNGRY_TIME_BEFORE_KITTEN_RUNS_AWAY_IN_SECONDS - timeHungry - secondsSinceSpawn);
                 }
             }
             if (event.getNewValue().equals("false")) {

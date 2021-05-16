@@ -32,7 +32,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j
-public enum Felines {
+enum Felines {
 
     //white/black
     KITTEN_5591(5591, ItemID.PET_KITTEN),
