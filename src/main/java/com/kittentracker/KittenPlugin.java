@@ -88,11 +88,11 @@ public class KittenPlugin extends Plugin {
 
     private static final int ATTENTION_FIRST_WARNING_TIME_LEFT_IN_SECONDS = 14 * 60; // 14 MINUTES
     private static final int ATTENTION_FINAL_WARNING_TIME_LEFT_IN_SECONDS = 7 * 60; // 7 MINUTES
-    private static final int ATTENTION_TIME_NEW_KITTEN_IN_SECONDS = 25 * 60; // 25 MINUTES
-    private static final int ATTENTION_TIME_SINGLE_STROKE_IN_SECONDS = 18 * 60; // 18 MINUTES
-    private static final int ATTENTION_TIME_MULTIPLE_STROKES_IN_SECONDS = 25 * 60; // 25 MINUTES
-    private static final int ATTENTION_TIME_BALL_OF_WOOL_IN_SECONDS = 51 * 60; // 51 MINUTES
-    private static final int ATTENTION_TIME_FROM_WARNING_TO_RUNNING_AWAY_IN_SECONDS = (7 + 7) * 60; // 14 MINUTES
+    public static final int ATTENTION_TIME_NEW_KITTEN_IN_SECONDS = 25 * 60; // 25 MINUTES
+    public static final int ATTENTION_TIME_SINGLE_STROKE_IN_SECONDS = 18 * 60; // 18 MINUTES
+    public static final int ATTENTION_TIME_MULTIPLE_STROKES_IN_SECONDS = 25 * 60; // 25 MINUTES
+    public static final int ATTENTION_TIME_BALL_OF_WOOL_IN_SECONDS = 51 * 60; // 51 MINUTES
+    public static final int ATTENTION_TIME_FROM_WARNING_TO_RUNNING_AWAY_IN_SECONDS = (7 + 7) * 60; // 14 MINUTES
     private static final int ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_NEW_KITTEN_IN_SECONDS = ATTENTION_TIME_NEW_KITTEN_IN_SECONDS + ATTENTION_TIME_FROM_WARNING_TO_RUNNING_AWAY_IN_SECONDS; // 32 MINUTES
     private static final int ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS = ATTENTION_TIME_SINGLE_STROKE_IN_SECONDS + ATTENTION_TIME_FROM_WARNING_TO_RUNNING_AWAY_IN_SECONDS; // 32 MINUTES
     private static final int ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_MULTIPLE_STROKES_IN_SECONDS = ATTENTION_TIME_MULTIPLE_STROKES_IN_SECONDS + ATTENTION_TIME_FROM_WARNING_TO_RUNNING_AWAY_IN_SECONDS; // 39 MINUTES
@@ -100,33 +100,6 @@ public class KittenPlugin extends Plugin {
 
     private static final int TIME_TO_ADULTHOOD_IN_SECONDS = 3 * 3600; // 3 HOURS
     private static final int TIME_TILL_OVERGROWN_IN_SECONDS = (int) (2.5 * 3600); // 2-3 HOURS -> 2.5 HOURS
-
-    enum KittenAttentionType {
-        NEW_KITTEN(0, ATTENTION_TIME_NEW_KITTEN_IN_SECONDS),
-        SINGLE_STROKE(1, ATTENTION_TIME_SINGLE_STROKE_IN_SECONDS),
-        MULTIPLE_STROKES(2, ATTENTION_TIME_MULTIPLE_STROKES_IN_SECONDS),
-        BALL_OF_WOOL(3, ATTENTION_TIME_BALL_OF_WOOL_IN_SECONDS);
-
-        private final int id;
-        private final int attentionTime;
-
-        KittenAttentionType(int id, int attentionTime) {
-            this.id = id;
-            this.attentionTime = attentionTime;
-        }
-
-        int getId() {
-            return id;
-        }
-
-        int getAttentionTime() {
-            return attentionTime;
-        }
-
-        int getTimeBeforeKittenRunsAway() {
-            return attentionTime + ATTENTION_TIME_FROM_WARNING_TO_RUNNING_AWAY_IN_SECONDS;
-        }
-    }
 
     private boolean ready;
     private Instant kittenSpawned;
@@ -188,12 +161,12 @@ public class KittenPlugin extends Plugin {
 
     @Subscribe
     public void onVarbitChanged(VarbitChanged event) {
-        if (playerHasFollower() & followerID == 0) // player gained a follower
+        if (playerHasFollower() && followerID == 0) // player gained a follower
         {
             getFollowerID();
         }
 
-        if (!playerHasFollower() & followerID != 0) // player lost it's follower
+        if (!playerHasFollower() && followerID != 0) // player lost it's follower
         {
             byeFollower();
         }
@@ -230,7 +203,7 @@ public class KittenPlugin extends Plugin {
             overgrown = true;
         }
 
-        if (!cat & !lazycat & !wilycat & !kitten & !overgrown) {
+        if (!cat && !lazycat && !wilycat && !kitten && !overgrown) {
             nonFeline = true;
             return; // The NPC that spawned is not a feline.
         }
@@ -375,7 +348,7 @@ public class KittenPlugin extends Plugin {
         infoBoxManager.removeIf(t -> t instanceof KittenHungryTimer);
         KittenHungryTimer timer = new KittenHungryTimer(itemManager.getImage(ItemID.SEASONED_SARDINE), this, Duration.ofSeconds(seconds));
 
-        if (config.kittenHungryBox() & kitten) {
+        if (config.kittenHungryBox() && kitten) {
             timer.setTooltip(TOOLTIP_TIME_UNTIL_YOUR_KITTEN_LEAVES_YOU_FOR_BEING_UNDERFED);
             infoBoxManager.addInfoBox(timer);
         } // TODO use something else than infobox. Infoboxes with timers have a max time of 60 minutes
@@ -388,7 +361,7 @@ public class KittenPlugin extends Plugin {
         infoBoxManager.removeIf(t -> t instanceof KittenAttentionTimer);
         KittenAttentionTimer timer = new KittenAttentionTimer(itemManager.getImage(1759), this, Duration.ofSeconds(seconds));
 
-        if (config.kittenAttentionBox() & kitten) {
+        if (config.kittenAttentionBox() && kitten) {
             timer.setTooltip(TOOLTIP_APPROXIMATE_TIME_UNTIL_YOUR_KITTEN_LEAVES_YOU_FOR_BEING_NEGLECTFUL);
             infoBoxManager.addInfoBox(timer);
         } // TODO use something else than infobox. Infoboxes with timers have a max time of 60 minutes
@@ -413,6 +386,7 @@ public class KittenPlugin extends Plugin {
                             case SINGLE_STROKE:
                             case MULTIPLE_STROKES:
                                 maxTimePastForMultiStrokeSeconds = lastAttentionType.getAttentionTime();
+                                break;
                         }
                     }
 
@@ -436,6 +410,7 @@ public class KittenPlugin extends Plugin {
                 }
                 kittenAttention = Instant.now();
                 timeNeglected = 0;
+                break;
             }
             case CHAT_THE_KITTEN_GOBBLES_UP_THE_FISH:
             case CHAT_THE_KITTEN_LAPS_UP_THE_MILK: {
@@ -444,6 +419,7 @@ public class KittenPlugin extends Plugin {
                     addHungryTimer(HUNGRY_TIME_BEFORE_KITTEN_RUNS_AWAY_IN_SECONDS);
                 }
                 timeHungry = 0;
+                break;
             }
             case CHAT_YOUR_KITTEN_IS_HUNGRY: // 6 minute warning
             {
@@ -454,6 +430,7 @@ public class KittenPlugin extends Plugin {
                     addHungryTimer(HUNGRY_FIRST_WARNING_TIME_LEFT_IN_SECONDS);
                 }
                 kittenFed = (Instant.now().minus(HUNGRY_TIME_BEFORE_FIRST_WARNING_IN_MINUTES, ChronoUnit.MINUTES));
+                break;
             }
             case CHAT_YOUR_KITTEN_IS_VERY_HUNGRY: {
                 if (config.kittenNotifications()) {
@@ -463,6 +440,7 @@ public class KittenPlugin extends Plugin {
                     addHungryTimer(HUNGRY_FINAL_WARNING_TIME_LEFT_IN_SECONDS);
                 }
                 kittenFed = (Instant.now().minus(HUNGRY_TIME_BEFORE_FINAL_WARNING_IN_MINUTES, ChronoUnit.MINUTES));
+                break;
             }
             case CHAT_YOUR_KITTEN_WANTS_ATTENTION: {
                 if (config.kittenNotifications()) {
@@ -472,6 +450,7 @@ public class KittenPlugin extends Plugin {
                     addAttentionTimer(ATTENTION_FIRST_WARNING_TIME_LEFT_IN_SECONDS);
                 }
                 kittenAttention = (Instant.now().minus(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS, ChronoUnit.MINUTES)); // used minimum time before kitten runs away, can be either 18, 25 or 51 minutes (+14 after warning)
+                break;
             }
             case CHAT_YOUR_KITTEN_REALLY_WANTS_ATTENTION: {
                 if (config.kittenNotifications()) {
@@ -481,6 +460,7 @@ public class KittenPlugin extends Plugin {
                     addAttentionTimer(ATTENTION_FINAL_WARNING_TIME_LEFT_IN_SECONDS);
                 }
                 kittenAttention = (Instant.now().minus(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS, ChronoUnit.MINUTES)); // used minimum time before kitten runs away, can be either 18, 25 or 51 minutes (+14 after warning)
+                break;
             }
             case CHAT_YOUR_KITTEN_GOT_LONELY_AND_RAN_OFF:
             case CHAT_THE_CAT_HAS_RUN_AWAY: //shoo away option
@@ -504,6 +484,7 @@ public class KittenPlugin extends Plugin {
                 kitten = false;
                 overgrown = false;
                 nonFeline = false;
+                break;
             }
         }
     }
@@ -656,6 +637,7 @@ public class KittenPlugin extends Plugin {
                 break;
             case LOGIN_SCREEN:
                 byeFollower();
+                break;
         }
     }
 

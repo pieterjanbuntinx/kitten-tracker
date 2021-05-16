@@ -154,7 +154,7 @@ public interface KittenConfig extends Config {
             description = "",
             hidden = true
     )
-    default KittenPlugin.KittenAttentionType lastAttentionType() {
+    default KittenAttentionType lastAttentionType() {
         return null;
     }
 
@@ -163,7 +163,7 @@ public interface KittenConfig extends Config {
             name = "",
             description = ""
     )
-    void lastAttentionType(KittenPlugin.KittenAttentionType lastAttentionType);
+    void lastAttentionType(KittenAttentionType lastAttentionType);
 
 }
 
