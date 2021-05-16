@@ -1,2 +1,7 @@
-# Kitten status plugin
-This plugin is still in development and currently not usable.
+# Kitten Tracker RuneLite plugin
+
+This plugins allows you to track the age of your pet kitten and shows how long before your kitten will leave you <br> 
+because of a lack of attention or when it is starving. It also shows notifications to remind you to feed your cat or <br>
+give it attention.
+
+
