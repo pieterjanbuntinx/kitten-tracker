@@ -31,42 +31,42 @@ import net.runelite.client.config.ConfigItem;
 @ConfigGroup("kittenConfig")
 public interface KittenConfig extends Config {
     @ConfigItem(
-            keyName = "kittenInfoBox",
-            name = "Display kitten info box",
+            keyName = "kittenOverlay",
+            name = "Display kitten overlay",
             description = "Displays a countdown for your kitten to grow into a cat",
             position = 1
     )
-    default boolean kittenInfoBox() {
+    default boolean kittenOverlay() {
         return true;
     }
 
     @ConfigItem(
-            keyName = "catInfoBox",
-            name = "Display cat info box",
+            keyName = "catOverlay",
+            name = "Display cat overlay",
             description = "Displays a countdown for your cat to grow into a overgrown cat",
             position = 2
     )
-    default boolean catInfoBox() {
+    default boolean catOverlay() {
         return true;
     }
 
     @ConfigItem(
-            keyName = "kittenHungryBox",
+            keyName = "kittenHungryOverlay",
             name = "Display kitten hunger",
             description = "Displays a countdown until your kitten leaves you for being underfed",
             position = 3
     )
-    default boolean kittenHungryBox() {
+    default boolean kittenHungryOverlay() {
         return true;
     }
 
     @ConfigItem(
-            keyName = "kittenAttentionBox",
+            keyName = "kittenAttentionOverlay",
             name = "Display kitten attention",
             description = "Displays a countdown until your kitten leaves you for being neglectful",
             position = 4
     )
-    default boolean kittenAttentionBox() {
+    default boolean kittenAttentionOverlay() {
         return true;
     }
 
