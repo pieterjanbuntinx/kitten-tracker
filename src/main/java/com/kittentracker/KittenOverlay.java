@@ -39,7 +39,7 @@ public class KittenOverlay extends OverlayPanel {
                         .leftFont(graphics.getFont().deriveFont(
                                 Collections.singletonMap(
                                         TextAttribute.WEIGHT, TextAttribute.WEIGHT_BOLD)))
-                        .left((kittenPlugin.isKitten() ? "Kitten status" : "Cat status") + ": ")
+                        .left(kittenPlugin.isKitten() ? "Kitten status" : "Cat status")
                         .build());
             }
 

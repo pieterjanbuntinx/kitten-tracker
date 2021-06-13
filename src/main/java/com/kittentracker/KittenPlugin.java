@@ -126,6 +126,9 @@ public class KittenPlugin extends Plugin {
     private boolean overgrown = false; // npcId 5598-5604
     private boolean nonFeline = false;
 
+    private boolean timersPaused = false;
+    private long attentionTimeLeft, growthTimeLeft, hungryTimeLeft;
+
     @Inject
     private Client client;
     @Inject
@@ -505,11 +508,11 @@ public class KittenPlugin extends Plugin {
         }
     }
 
-
     @Subscribe
     public void onGameTick(GameTick tick) {
         Widget playerDialog = client.getWidget(WidgetID.DIALOG_PLAYER_GROUP_ID, WIDGET_ID_DIALOG_PLAYER_TEXT);
 
+        boolean wake = true;
         if (playerDialog != null) {
             String playerText = Text.removeTags(playerDialog.getText()); // remove color and linebreaks
             if (playerText.equals(DIALOG_CAT_BALL_OF_WOOL)) {
@@ -519,6 +522,8 @@ public class KittenPlugin extends Plugin {
                 }
                 timeNeglected = 0;
                 lastAttentionType = KittenAttentionType.BALL_OF_WOOL;
+
+                wake = false;
             }
         }
         Widget notificationDialog = client.getWidget(WIDGET_ID_DIALOG_NOTIFICATION_GROUP_ID, WIDGET_ID_DIALOG_NOTIFICATION_TEXT);
@@ -529,12 +534,12 @@ public class KittenPlugin extends Plugin {
                 getFollowerID();
                 infoBoxManager.removeIf(t -> t instanceof KittenAttentionTimer);
                 infoBoxManager.removeIf(t -> t instanceof KittenHungryTimer);
-            }
-            if (notificationText.equals(DIALOG_CAT_OVERGROWN)) {
+                wake = false;
+            } else if (notificationText.equals(DIALOG_CAT_OVERGROWN)) {
                 cat = false;
                 getFollowerID();
-            }
-            if (notificationText.startsWith(DIALOG_AFTER_TAKING_A_GOOD_LOOK)) {
+                wake = false;
+            } else if (notificationText.startsWith(DIALOG_AFTER_TAKING_A_GOOD_LOOK)) {
                 String ageStr = notificationText.substring(DIALOG_AFTER_TAKING_A_GOOD_LOOK.length());
                 int end = ageStr.indexOf("And approximate time until");
                 ageStr = ageStr.substring(0, end);
@@ -593,6 +598,23 @@ public class KittenPlugin extends Plugin {
                 if (cat) {
                     addKittenGrowthBox((TIME_TO_ADULTHOOD_IN_SECONDS + TIME_TILL_OVERGROWN_IN_SECONDS - age));
                 }
+                wake = false;
+            }
+        }
+
+        if (wake) {
+            if (timersPaused) {
+                timersPaused = false;
+                addKittenGrowthBox((int) (growthTimeLeft / 1000));
+                addHungryTimer((int) (hungryTimeLeft / 1000));
+                addAttentionTimer((int) (attentionTimeLeft / 1000));
+            }
+        } else { // pause timers if a dialog window or notification window concerning your cat is open
+            if (!timersPaused) {
+                timersPaused = true;
+                attentionTimeLeft = Math.abs(kittenAttentionTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
+                growthTimeLeft = Math.abs(growthTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
+                hungryTimeLeft = Math.abs(kittenHungryTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
             }
         }
     }
@@ -724,7 +746,7 @@ public class KittenPlugin extends Plugin {
 
     public Long getTimeUntilOvergrown() {
         if (growthTimer == null) {
-            return 0l;
+            return 0L;
         }
         long ret = Math.abs(growthTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
         if (isCat()) {
