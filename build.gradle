@@ -14,8 +14,6 @@ def runeLiteVersion = '1.7.11.1'
 
 dependencies {
 	compileOnly group: 'net.runelite', name:'client', version: runeLiteVersion
-	//compileOnly files('C:/Users/piete/IdeaProjects/runelite/runelite-client/target/client-1.7.8-SNAPSHOT.jar')
-	//implementation files('C:/Users/piete/IdeaProjects/runelite/runelite-client/target/client-1.7.8-SNAPSHOT.jar')
 
 	compileOnly 'org.projectlombok:lombok:1.18.4'
 	annotationProcessor 'org.projectlombok:lombok:1.18.4'
@@ -23,8 +21,6 @@ dependencies {
 	testImplementation 'junit:junit:4.12'
 	testImplementation group: 'net.runelite', name:'client', version: runeLiteVersion
 	testImplementation group: 'net.runelite', name:'jshell', version: runeLiteVersion
-	//testImplementation files('C:/Users/piete/IdeaProjects/runelite/runelite-client/target/client-1.7.8-SNAPSHOT.jar')
-	//testImplementation files('C:/Users/piete/IdeaProjects/runelite/runelite-jshell/target/jshell-1.7.8-SNAPSHOT.jar')
 }
 
 group = 'com.kittentracker'
