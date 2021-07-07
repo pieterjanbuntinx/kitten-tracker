@@ -60,7 +60,7 @@ import java.time.temporal.ChronoUnit;
 public class KittenPlugin extends Plugin {
     private static final int VAR_PLAYER_FOLLOWER = 447;
     private static final int WIDGET_ID_DIALOG_NOTIFICATION_GROUP_ID = 229;
-    private static final int WIDGET_ID_DIALOG_PLAYER_TEXT = 4;
+    private static final int WIDGET_ID_DIALOG_PLAYER_TEXT = 5;
     private static final int WIDGET_ID_DIALOG_NOTIFICATION_TEXT = 1;
 
     private static final String DIALOG_CAT_STROKE = "That cat sure loves to be stroked.";
