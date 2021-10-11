@@ -27,6 +27,7 @@ public class KittenOverlay extends OverlayPanel {
         this.kittenPlugin = kittenPlugin;
         this.kittenConfig = kittenConfig;
         getMenuEntries().add(new OverlayMenuEntry(MenuAction.RUNELITE_OVERLAY_CONFIG, OverlayManager.OPTION_CONFIGURE, "Kitten Tracker Overlay"));
+        setPreferredSize(new Dimension(162, 88));
     }
 
     @Override
@@ -46,7 +47,7 @@ public class KittenOverlay extends OverlayPanel {
             if (kittenPlugin.isKitten()) {
                 if (kittenConfig.kittenOverlay()) {
                     panelComponent.getChildren().add(LineComponent.builder()
-                            .left("Adult: ")
+                            .left("Grown up in: ")
                             .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeUntilFullyGrown(), "H:mm:ss", true))
                             .build()
                     );
@@ -54,7 +55,7 @@ public class KittenOverlay extends OverlayPanel {
 
                 if (kittenConfig.kittenHungryOverlay()) {
                     panelComponent.getChildren().add(LineComponent.builder()
-                            .left("Food: ")
+                            .left("Hungry in: ")
                             .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeBeforeHungry(), "H:mm:ss", true))
                             .build()
                     );
@@ -62,7 +63,7 @@ public class KittenOverlay extends OverlayPanel {
 
                 if (kittenConfig.kittenAttentionOverlay()) {
                     panelComponent.getChildren().add(LineComponent.builder()
-                            .left("Play: ")
+                            .left("Needs attention in: ")
                             .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeBeforeNeedingAttention(), "H:mm:ss", true))
                             .build()
                     );
@@ -78,7 +79,7 @@ public class KittenOverlay extends OverlayPanel {
                 } else {
                     if (kittenConfig.catOverlay()) {
                         panelComponent.getChildren().add(LineComponent.builder()
-                                .left("Overgrown: ")
+                                .left("Overgrown  in: ")
                                 .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeUntilOvergrown(), "H:mm:ss", true))
                                 .build()
                         );
