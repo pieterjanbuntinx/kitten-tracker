@@ -46,24 +46,24 @@ public class KittenOverlay extends OverlayPanel {
             if (kittenPlugin.isKitten()) {
                 if (kittenConfig.kittenOverlay()) {
                     panelComponent.getChildren().add(LineComponent.builder()
-                            .left("Grown up in: ")
-                            .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeUntilFullyGrown(), "H'h' m'm' s's'", true))
+                            .left("Adult: ")
+                            .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeUntilFullyGrown(), "HH:mm:ss", true))
                             .build()
                     );
                 }
 
                 if (kittenConfig.kittenHungryOverlay()) {
                     panelComponent.getChildren().add(LineComponent.builder()
-                            .left("Hungry in: ")
-                            .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeBeforeHungry(), "H'h' m'm' s's'", true))
+                            .left("Food: ")
+                            .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeBeforeHungry(), "HH:mm:ss", true))
                             .build()
                     );
                 }
 
                 if (kittenConfig.kittenAttentionOverlay()) {
                     panelComponent.getChildren().add(LineComponent.builder()
-                            .left("Needs attention in: ")
-                            .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeBeforeNeedingAttention(), "H'h' m'm' s's'", true))
+                            .left("Play: ")
+                            .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeBeforeNeedingAttention(), "HH:mm:ss", true))
                             .build()
                     );
                 }
@@ -71,15 +71,15 @@ public class KittenOverlay extends OverlayPanel {
                 if (kittenPlugin.isOverGrown()) {
                     if (kittenConfig.catOverlay()) {
                         panelComponent.getChildren().add(LineComponent.builder()
-                                .left("Your you have an overgrown cat.")
+                                .left("You have an overgrown cat.")
                                 .build()
                         );
                     }
                 } else {
                     if (kittenConfig.catOverlay()) {
                         panelComponent.getChildren().add(LineComponent.builder()
-                                .left("Overgrown in: ")
-                                .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeUntilOvergrown(), "H'h' m'm' s's'", true))
+                                .left("Overgrown: ")
+                                .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeUntilOvergrown(), "HH:mm:ss", true))
                                 .build()
                         );
                     }
