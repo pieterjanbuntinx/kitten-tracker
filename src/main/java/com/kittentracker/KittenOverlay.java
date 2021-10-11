@@ -47,7 +47,7 @@ public class KittenOverlay extends OverlayPanel {
                 if (kittenConfig.kittenOverlay()) {
                     panelComponent.getChildren().add(LineComponent.builder()
                             .left("Adult: ")
-                            .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeUntilFullyGrown(), "HH:mm:ss", true))
+                            .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeUntilFullyGrown(), "H:mm:ss", true))
                             .build()
                     );
                 }
@@ -55,7 +55,7 @@ public class KittenOverlay extends OverlayPanel {
                 if (kittenConfig.kittenHungryOverlay()) {
                     panelComponent.getChildren().add(LineComponent.builder()
                             .left("Food: ")
-                            .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeBeforeHungry(), "HH:mm:ss", true))
+                            .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeBeforeHungry(), "H:mm:ss", true))
                             .build()
                     );
                 }
@@ -63,7 +63,7 @@ public class KittenOverlay extends OverlayPanel {
                 if (kittenConfig.kittenAttentionOverlay()) {
                     panelComponent.getChildren().add(LineComponent.builder()
                             .left("Play: ")
-                            .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeBeforeNeedingAttention(), "HH:mm:ss", true))
+                            .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeBeforeNeedingAttention(), "H:mm:ss", true))
                             .build()
                     );
                 }
@@ -79,7 +79,7 @@ public class KittenOverlay extends OverlayPanel {
                     if (kittenConfig.catOverlay()) {
                         panelComponent.getChildren().add(LineComponent.builder()
                                 .left("Overgrown: ")
-                                .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeUntilOvergrown(), "HH:mm:ss", true))
+                                .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeUntilOvergrown(), "H:mm:ss", true))
                                 .build()
                         );
                     }
