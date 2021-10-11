@@ -79,7 +79,7 @@ public class KittenOverlay extends OverlayPanel {
                 } else {
                     if (kittenConfig.catOverlay()) {
                         panelComponent.getChildren().add(LineComponent.builder()
-                                .left("Overgrown  in: ")
+                                .left("Overgrown in: ")
                                 .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeUntilOvergrown(), "H:mm:ss", true))
                                 .build()
                         );
