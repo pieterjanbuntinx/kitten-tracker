@@ -68,6 +68,7 @@ public class KittenPlugin extends Plugin {
     private static final String DIALOG_CAT_GROWN = "Your kitten has grown into a healthy cat that can hunt for itself.";
     private static final String DIALOG_CAT_OVERGROWN = "Your cat has grown into a mighty feline, but it will no longer be able to chase vermin.";
     private static final String DIALOG_AFTER_TAKING_A_GOOD_LOOK = "After taking a good look at your kitten you guess that its age is: ";
+    private static final String DIALOG_HAND_OVER_CAT_CIVILIAN = "You hand over the cat.You are given";
 
     private static final String CHAT_STROKE_CAT = "You softly stroke your cat.";
     private static final String CHAT_THE_KITTEN_GOBBLES_UP_THE_FISH = "The kitten gobbles up the fish.";
@@ -176,9 +177,28 @@ public class KittenPlugin extends Plugin {
 
     @Subscribe
     public void onVarbitChanged(VarbitChanged event) {
-        if (playerHasFollower() && followerID == 0) // player gained a follower
-        {
-            getFollowerID();
+        if (playerHasFollower()) {
+            if (followerID == 0) { // player got a new follower
+                getFollowerID();
+            } else {
+                /*
+                 * Follower id has changed. Example: cat changed into hell cat
+                 * Will not trigger with change kitten -> cat -> overgrown cat
+                 * The notification dialog event (onGameTick) handles it in this case
+                 */
+                int followerVarPlayerValue = client.getVarpValue(VAR_PLAYER_FOLLOWER);
+
+                int followerIdTemp = followerVarPlayerValue >> 16; // followerID is the first 2 bytes
+
+                // if follower is a cat, change followerID
+                if ((followerID >= NpcID.CAT_1619 && followerID <= NpcID.HELLCAT)
+                        || (followerID >= NpcID.LAZY_CAT && followerID <= NpcID.LAZY_HELLCAT)
+                        || (followerID >= NpcID.WILY_CAT && followerID <= NpcID.WILY_HELLCAT)
+                        || (followerID >= NpcID.KITTEN_5591 && followerID <= NpcID.HELLKITTEN)
+                        || (followerID >= NpcID.OVERGROWN_CAT && followerID <= NpcID.OVERGROWN_HELLCAT)) {
+                    followerID = followerIdTemp;
+                }
+            }
         }
 
         if (!playerHasFollower() && followerID != 0) // player lost it's follower
@@ -202,19 +222,23 @@ public class KittenPlugin extends Plugin {
     }
 
     private void newFollower() {
+        cat = false;
+        lazycat = false;
+        wilycat = false;
+        kitten = false;
+        overgrown = false;
+        nonFeline = false;
+        timersPaused = false;
+
         if (followerID >= NpcID.CAT_1619 && followerID <= NpcID.HELLCAT) {
             cat = true;
-        }
-        if (followerID >= NpcID.LAZY_CAT && followerID <= NpcID.LAZY_HELLCAT) {
+        } else if (followerID >= NpcID.LAZY_CAT && followerID <= NpcID.LAZY_HELLCAT) {
             lazycat = true;
-        }
-        if (followerID >= NpcID.WILY_CAT && followerID <= NpcID.WILY_HELLCAT) {
+        } else if (followerID >= NpcID.WILY_CAT && followerID <= NpcID.WILY_HELLCAT) {
             wilycat = true;
-        }
-        if (followerID >= NpcID.KITTEN_5591 && followerID <= NpcID.HELLKITTEN) {
+        } else if (followerID >= NpcID.KITTEN_5591 && followerID <= NpcID.HELLKITTEN) {
             kitten = true;
-        }
-        if (followerID >= NpcID.OVERGROWN_CAT && followerID <= NpcID.OVERGROWN_HELLCAT) {
+        } else if (followerID >= NpcID.OVERGROWN_CAT && followerID <= NpcID.OVERGROWN_HELLCAT) {
             overgrown = true;
         }
 
@@ -338,52 +362,21 @@ public class KittenPlugin extends Plugin {
             return;
         }
 
-        // infoBoxManager.removeIf(t -> t instanceof KittenGrowthTimer);
         growthTimer = new KittenGrowthTimer(feline, itemManager.getImage(feline.getItemSpriteId()), this, Duration.ofSeconds(seconds));
-
-        /*
-        if (kitten) {
-            if (config.kittenInfoBox()) {
-                kittenGrowthTimer.setTooltip(TOOLTIP_APPROXIMATE_TIME_LEFT_TO_GROW_INTO_A_CAT);
-                infoBoxManager.addInfoBox(kittenGrowthTimer);
-            }
-        }
-
-        if (cat) {
-            if (config.catInfoBox()) {
-                kittenGrowthTimer.setTooltip(TOOLTIP_APPROXIMATE_TIME_LEFT_TO_TRANSFORM_INTO_AN_OVERGROWN_CAT);
-                infoBoxManager.addInfoBox(kittenGrowthTimer);
-            }
-        }
-         */
     }
 
     private void addHungryTimer(int seconds) {
         if (seconds <= 0) {
             return;
         }
-        // infoBoxManager.removeIf(t -> t instanceof KittenHungryTimer);
         kittenHungryTimer = new KittenHungryTimer(itemManager.getImage(ItemID.SEASONED_SARDINE), this, Duration.ofSeconds(seconds));
-
-        /*
-        if (config.kittenHungryBox() && kitten) {
-            kittenHungryTimer.setTooltip(TOOLTIP_TIME_UNTIL_YOUR_KITTEN_LEAVES_YOU_FOR_BEING_UNDERFED);
-            infoBoxManager.addInfoBox(kittenHungryTimer);
-        }
-         */
     }
 
     private void addAttentionTimer(int seconds) {
         if (seconds <= 0) {
             return;
         }
-        // infoBoxManager.removeIf(t -> t instanceof KittenAttentionTimer);
         kittenAttentionTimer = new KittenAttentionTimer(itemManager.getImage(1759), this, Duration.ofSeconds(seconds));
-
-        // if (config.kittenAttentionBox() && kitten) {
-        //     timer.setTooltip(TOOLTIP_APPROXIMATE_TIME_UNTIL_YOUR_KITTEN_LEAVES_YOU_FOR_BEING_NEGLECTFUL);
-        //     infoBoxManager.addInfoBox(timer);
-        // }
     }
 
     @Subscribe
@@ -392,7 +385,6 @@ public class KittenPlugin extends Plugin {
             return;
         }
         String message = Text.removeTags(event.getMessage());
-
         switch (message) {
             case CHAT_STROKE_CAT: {
                 if (kittenAttention != null) { // if kitten has had attention within the time since spawn
@@ -510,7 +502,7 @@ public class KittenPlugin extends Plugin {
 
     @Subscribe
     public void onGameTick(GameTick tick) {
-        Widget playerDialog = client.getWidget(WidgetID.DIALOG_PLAYER_GROUP_ID, WIDGET_ID_DIALOG_PLAYER_TEXT);
+        Widget playerDialog = client.getWidget(WIDGET_ID_DIALOG_NOTIFICATION_GROUP_ID, WIDGET_ID_DIALOG_PLAYER_TEXT);
 
         boolean wake = true;
         if (playerDialog != null) {
@@ -526,6 +518,7 @@ public class KittenPlugin extends Plugin {
                 wake = false;
             }
         }
+
         Widget notificationDialog = client.getWidget(WIDGET_ID_DIALOG_NOTIFICATION_GROUP_ID, WIDGET_ID_DIALOG_NOTIFICATION_TEXT);
         if (notificationDialog != null) {
             String notificationText = Text.removeTags(notificationDialog.getText()); // remove color and linebreaks
@@ -601,6 +594,31 @@ public class KittenPlugin extends Plugin {
                 wake = false;
             }
         }
+
+        Widget dialog = client.getWidget(WidgetID.DIALOG_SPRITE_GROUP_ID, 2);
+        if (dialog != null) {
+            String notificationText = Text.removeTags(dialog.getText());
+            if (notificationText.startsWith(DIALOG_HAND_OVER_CAT_CIVILIAN)) {
+                kittenSpawned = null;
+                kittenFed = null;
+                kittenAttention = null;
+                previousFeline = 0;
+                config.felineId(0); // in case the new kitten has the same NpcID. We need to track growth progress from the beginning.
+
+                infoBoxManager.removeIf(t -> t instanceof KittenGrowthTimer);
+                infoBoxManager.removeIf(t -> t instanceof KittenHungryTimer);
+                infoBoxManager.removeIf(t -> t instanceof KittenAttentionTimer);
+                followerID = 0;
+                cat = false;
+                lazycat = false;
+                wilycat = false;
+                kitten = false;
+                overgrown = false;
+                nonFeline = false;
+                return;
+            }
+        }
+
 
         if (wake) {
             if (timersPaused) {
