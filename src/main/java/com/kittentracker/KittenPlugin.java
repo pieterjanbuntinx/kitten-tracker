@@ -80,19 +80,23 @@ public class KittenPlugin extends Plugin {
     private static final String CHAT_YOUR_KITTEN_GOT_LONELY_AND_RAN_OFF = "Your kitten got lonely and ran off.";
     private static final String CHAT_THE_CAT_HAS_RUN_AWAY = "The cat has run away.";
 
+    private static final String NOTIFICATION_KITTEN_WILL_RUN_AWAY_IN_1_MINUTE = "Kitten will run away in 1 minute!";
+
     private static final String TOOLTIP_APPROXIMATE_TIME_LEFT_TO_GROW_INTO_A_CAT = "Approximate time left to grow into a cat";
     private static final String TOOLTIP_APPROXIMATE_TIME_LEFT_TO_TRANSFORM_INTO_AN_OVERGROWN_CAT = "Approximate time left to transform into an overgrown cat";
     private static final String TOOLTIP_TIME_UNTIL_YOUR_KITTEN_LEAVES_YOU_FOR_BEING_UNDERFED = "Time until your kitten leaves you for being underfed";
     private static final String TOOLTIP_APPROXIMATE_TIME_UNTIL_YOUR_KITTEN_LEAVES_YOU_FOR_BEING_NEGLECTFUL = "Approximate time until your kitten leaves you for being neglectful";
 
-    private static final int HUNGRY_FIRST_WARNING_TIME_LEFT_IN_SECONDS = 6 * 60; // 6 MINUTES
-    private static final int HUNGRY_FINAL_WARNING_TIME_LEFT_IN_SECONDS = 3 * 60; // 3 MINUTES
-    private static final int HUNGRY_TIME_BEFORE_FIRST_WARNING_IN_MINUTES = 24; // MINUTES
-    private static final int HUNGRY_TIME_BEFORE_FINAL_WARNING_IN_MINUTES = 27; // MINUTES
+    public static final int HUNGRY_FIRST_WARNING_TIME_LEFT_IN_SECONDS = 6 * 60; // 6 MINUTES
+    public static final int HUNGRY_FINAL_WARNING_TIME_LEFT_IN_SECONDS = 3 * 60; // 3 MINUTES
+    public static final long HUNGRY_TIME_ONE_MINUTE_WARNING_MS = 1 * 60 * 1000; // 1 MINUTE
+    private static final int HUNGRY_TIME_BEFORE_FIRST_WARNING_IN_MINUTES = 24; // 24 MINUTES
+    private static final int HUNGRY_TIME_BEFORE_FINAL_WARNING_IN_MINUTES = 27; // 27 MINUTES
     private static final int HUNGRY_TIME_BEFORE_KITTEN_RUNS_AWAY_IN_SECONDS = 30 * 60; // 30 MINUTES
 
-    private static final int ATTENTION_FIRST_WARNING_TIME_LEFT_IN_SECONDS = 14 * 60; // 14 MINUTES
-    private static final int ATTENTION_FINAL_WARNING_TIME_LEFT_IN_SECONDS = 7 * 60; // 7 MINUTES
+    public static final int ATTENTION_FIRST_WARNING_TIME_LEFT_IN_SECONDS = 14 * 60; // 14 MINUTES
+    public static final int ATTENTION_FINAL_WARNING_TIME_LEFT_IN_SECONDS = 7 * 60; // 7 MINUTES
+    public static final long ATTENTION_TIME_ONE_MINUTE_WARNING_MS = 1 * 60 * 1000; // 1 MINUTE
     public static final int ATTENTION_TIME_NEW_KITTEN_IN_SECONDS = 25 * 60; // 25 MINUTES
     public static final int ATTENTION_TIME_SINGLE_STROKE_IN_SECONDS = 18 * 60; // 18 MINUTES
     public static final int ATTENTION_TIME_MULTIPLE_STROKES_IN_SECONDS = 25 * 60; // 25 MINUTES
@@ -128,6 +132,8 @@ public class KittenPlugin extends Plugin {
     private boolean nonFeline = false;
 
     private boolean timersPaused = false;
+    private boolean attentionNotificationSend = false;
+    private boolean hungryNotificationSend = false;
     private long attentionTimeLeft, growthTimeLeft, hungryTimeLeft;
 
     @Inject
@@ -229,6 +235,8 @@ public class KittenPlugin extends Plugin {
         overgrown = false;
         nonFeline = false;
         timersPaused = false;
+        attentionNotificationSend = false;
+        hungryNotificationSend = false;
 
         if (followerID >= NpcID.CAT_1619 && followerID <= NpcID.HELLCAT) {
             cat = true;
@@ -502,6 +510,20 @@ public class KittenPlugin extends Plugin {
 
     @Subscribe
     public void onGameTick(GameTick tick) {
+        // Send notification on 1 minute before kitten runs away (attention)
+        long timeBeforeNeedingAttention = getTimeBeforeNeedingAttention();
+        if (!attentionNotificationSend && timeBeforeNeedingAttention != 0 && timeBeforeNeedingAttention < ATTENTION_TIME_ONE_MINUTE_WARNING_MS) {
+            notifier.notify(NOTIFICATION_KITTEN_WILL_RUN_AWAY_IN_1_MINUTE);
+            attentionNotificationSend = true;
+        }
+
+        // Send notification on 1 minute before kitten runs away (hunger)
+        long timeBeforeHungry = getTimeBeforeHungry();
+        if (!hungryNotificationSend && timeBeforeHungry != 0 && timeBeforeHungry < HUNGRY_TIME_ONE_MINUTE_WARNING_MS) {
+            notifier.notify(NOTIFICATION_KITTEN_WILL_RUN_AWAY_IN_1_MINUTE);
+            hungryNotificationSend = true;
+        }
+
         Widget playerDialog = client.getWidget(WIDGET_ID_DIALOG_NOTIFICATION_GROUP_ID, WIDGET_ID_DIALOG_PLAYER_TEXT);
 
         boolean wake = true;
@@ -618,7 +640,6 @@ public class KittenPlugin extends Plugin {
                 return;
             }
         }
-
 
         if (wake) {
             if (timersPaused) {

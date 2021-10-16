@@ -12,12 +12,18 @@ import org.apache.commons.lang3.time.DurationFormatUtils;
 import javax.inject.Inject;
 import java.awt.*;
 import java.awt.font.TextAttribute;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Collections;
 
 public class KittenOverlay extends OverlayPanel {
     private final Client client;
     private final KittenPlugin kittenPlugin;
     private final KittenConfig kittenConfig;
+    private Instant blinkHunger = null;
+    private Instant blinkAttention = null;
+
+    private final static int blinkPeriod = 1000;
 
     @Inject
     private KittenOverlay(Client client, KittenPlugin kittenPlugin, KittenConfig kittenConfig) {
@@ -46,25 +52,73 @@ public class KittenOverlay extends OverlayPanel {
 
             if (kittenPlugin.isKitten()) {
                 if (kittenConfig.kittenOverlay()) {
-                    panelComponent.getChildren().add(LineComponent.builder()
+                    LineComponent lineComponent = LineComponent.builder()
                             .left("Grown up in: ")
                             .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeUntilFullyGrown(), "H:mm:ss", true))
-                            .build()
-                    );
+                            .build();
+                    panelComponent.getChildren().add(lineComponent);
                 }
 
                 if (kittenConfig.kittenHungryOverlay()) {
+                    Color color = Color.WHITE;
+                    Long timeUntilHungryMs = kittenPlugin.getTimeBeforeHungry();
+                    if (timeUntilHungryMs < KittenPlugin.HUNGRY_TIME_ONE_MINUTE_WARNING_MS) { //
+                        if (blinkHunger == null) {
+                            blinkHunger = Instant.now();
+                        } else {
+                            Duration timeSinceLastBlink = Duration.between(blinkHunger, Instant.now());
+
+                            if (timeSinceLastBlink.toMillis() > 2 * blinkPeriod) {
+                                blinkHunger = Instant.now();
+                                color = Color.ORANGE;
+                            } else if (timeSinceLastBlink.toMillis() > blinkPeriod) {
+                                color = Color.ORANGE;
+                            } else {
+                                color = Color.RED;
+                            }
+                        }
+                    } else if (timeUntilHungryMs < KittenPlugin.HUNGRY_FINAL_WARNING_TIME_LEFT_IN_SECONDS * 1000) {
+                        color = Color.RED;
+                    } else if (timeUntilHungryMs < KittenPlugin.HUNGRY_FIRST_WARNING_TIME_LEFT_IN_SECONDS * 1000) {
+                        color = Color.ORANGE;
+                    }
+
                     panelComponent.getChildren().add(LineComponent.builder()
                             .left("Hungry in: ")
-                            .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeBeforeHungry(), "H:mm:ss", true))
+                            .rightColor(color)
+                            .right(DurationFormatUtils.formatDuration(timeUntilHungryMs, "H:mm:ss", true))
                             .build()
                     );
                 }
 
                 if (kittenConfig.kittenAttentionOverlay()) {
+                    Color color = Color.WHITE;
+                    Long timeBeforeNeedingAttention = kittenPlugin.getTimeBeforeNeedingAttention();
+                    if (timeBeforeNeedingAttention < KittenPlugin.ATTENTION_TIME_ONE_MINUTE_WARNING_MS) { //
+                        if (blinkAttention == null) {
+                            blinkAttention = Instant.now();
+                        } else {
+                            Duration timeSinceLastBlink = Duration.between(blinkAttention, Instant.now());
+
+                            if (timeSinceLastBlink.toMillis() > 2 * blinkPeriod) {
+                                blinkAttention = Instant.now();
+                                color = Color.ORANGE;
+                            } else if (timeSinceLastBlink.toMillis() > blinkPeriod) {
+                                color = Color.ORANGE;
+                            } else {
+                                color = Color.RED;
+                            }
+                        }
+                    } else if (timeBeforeNeedingAttention < KittenPlugin.ATTENTION_FINAL_WARNING_TIME_LEFT_IN_SECONDS * 1000) {
+                        color = Color.RED;
+                    } else if (timeBeforeNeedingAttention < KittenPlugin.ATTENTION_FIRST_WARNING_TIME_LEFT_IN_SECONDS * 1000) {
+                        color = Color.ORANGE;
+                    }
+
                     panelComponent.getChildren().add(LineComponent.builder()
                             .left("Needs attention in: ")
-                            .right(DurationFormatUtils.formatDuration(kittenPlugin.getTimeBeforeNeedingAttention(), "H:mm:ss", true))
+                            .rightColor(color)
+                            .right(DurationFormatUtils.formatDuration(timeBeforeNeedingAttention, "H:mm:ss", true))
                             .build()
                     );
                 }
