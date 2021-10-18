@@ -28,12 +28,10 @@ package com.kittentracker;
 import com.google.inject.Provides;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
-import net.runelite.api.events.ChatMessage;
-import net.runelite.api.events.GameStateChanged;
-import net.runelite.api.events.GameTick;
-import net.runelite.api.events.VarbitChanged;
+import net.runelite.api.events.*;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetID;
+import net.runelite.api.widgets.WidgetModalMode;
 import net.runelite.client.Notifier;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
@@ -52,6 +50,7 @@ import javax.inject.Inject;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 
 @Slf4j
 @PluginDescriptor(
@@ -131,10 +130,10 @@ public class KittenPlugin extends Plugin {
     private boolean overgrown = false; // npcId 5598-5604
     private boolean nonFeline = false;
 
-    private boolean timersPaused = false;
     private boolean attentionNotificationSend = false;
     private boolean hungryNotificationSend = false;
-    private long attentionTimeLeft, growthTimeLeft, hungryTimeLeft;
+
+    private HashMap<Integer, Instant> openedWidgets = new HashMap<>();
 
     @Inject
     private Client client;
@@ -234,7 +233,6 @@ public class KittenPlugin extends Plugin {
         kitten = false;
         overgrown = false;
         nonFeline = false;
-        timersPaused = false;
         attentionNotificationSend = false;
         hungryNotificationSend = false;
 
@@ -526,7 +524,6 @@ public class KittenPlugin extends Plugin {
 
         Widget playerDialog = client.getWidget(WidgetID.DIALOG_PLAYER_GROUP_ID, WIDGET_ID_DIALOG_PLAYER_TEXT);
 
-        boolean wake = true;
         if (playerDialog != null) {
             String playerText = Text.removeTags(playerDialog.getText()); // remove color and linebreaks
             if (playerText.equals(DIALOG_CAT_BALL_OF_WOOL)) {
@@ -537,7 +534,6 @@ public class KittenPlugin extends Plugin {
                 timeNeglected = 0;
                 lastAttentionType = KittenAttentionType.BALL_OF_WOOL;
 
-                wake = false;
             }
         }
 
@@ -549,11 +545,9 @@ public class KittenPlugin extends Plugin {
                 getFollowerID();
                 infoBoxManager.removeIf(t -> t instanceof KittenAttentionTimer);
                 infoBoxManager.removeIf(t -> t instanceof KittenHungryTimer);
-                wake = false;
             } else if (notificationText.equals(DIALOG_CAT_OVERGROWN)) {
                 cat = false;
                 getFollowerID();
-                wake = false;
             } else if (notificationText.startsWith(DIALOG_AFTER_TAKING_A_GOOD_LOOK)) {
                 String ageStr = notificationText.substring(DIALOG_AFTER_TAKING_A_GOOD_LOOK.length());
                 int end = ageStr.indexOf("And approximate time until");
@@ -613,7 +607,6 @@ public class KittenPlugin extends Plugin {
                 if (cat) {
                     addKittenGrowthBox((TIME_TO_ADULTHOOD_IN_SECONDS + TIME_TILL_OVERGROWN_IN_SECONDS - age));
                 }
-                wake = false;
             }
         }
 
@@ -638,22 +631,6 @@ public class KittenPlugin extends Plugin {
                 overgrown = false;
                 nonFeline = false;
                 return;
-            }
-        }
-
-        if (wake) {
-            if (timersPaused) {
-                timersPaused = false;
-                addKittenGrowthBox((int) (growthTimeLeft / 1000));
-                addHungryTimer((int) (hungryTimeLeft / 1000));
-                addAttentionTimer((int) (attentionTimeLeft / 1000));
-            }
-        } else { // pause timers if a dialog window or notification window concerning your cat is open
-            if (!timersPaused) {
-                timersPaused = true;
-                attentionTimeLeft = Math.abs(kittenAttentionTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
-                growthTimeLeft = Math.abs(growthTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
-                hungryTimeLeft = Math.abs(kittenHungryTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
             }
         }
     }
@@ -733,7 +710,43 @@ public class KittenPlugin extends Plugin {
                 infoBoxManager.removeIf(t -> t instanceof KittenHungryTimer);
             }
         }
+    }
 
+    @Subscribe
+    private void onWidgetLoaded(WidgetLoaded ev) {
+        openedWidgets.put(ev.getGroupId(), Instant.now());
+    }
+
+    @Subscribe
+    private void onWidgetClosed(WidgetClosed ev) {
+        Instant openedWidgetTime = openedWidgets.get(ev.getGroupId());
+        if (openedWidgetTime != null) {
+            if (ev.getModalMode() != WidgetModalMode.NON_MODAL) {
+                addDurationToTimers(Duration.between(openedWidgetTime, Instant.now()));
+            }
+            openedWidgets.remove(ev.getGroupId());
+        }
+    }
+
+    private void addDurationToTimers(Duration duration) {
+        if (duration == null) {
+            return;
+        }
+
+        Duration timerDuration = growthTimer.getDuration();
+        if (growthTimer != null && timerDuration != null) {
+            growthTimer.setDuration(timerDuration.plus(duration));
+        }
+
+        timerDuration = kittenAttentionTimer.getDuration();
+        if (kittenAttentionTimer != null && timerDuration != null) {
+            kittenAttentionTimer.setDuration(timerDuration.plus(duration));
+        }
+
+        timerDuration = kittenHungryTimer.getDuration();
+        if (kittenHungryTimer != null && timerDuration != null) {
+            kittenHungryTimer.setDuration(timerDuration.plus(duration));
+        }
     }
 
     @Subscribe
