@@ -81,6 +81,16 @@ public interface KittenConfig extends Config {
     }
 
     @ConfigItem(
+            keyName = "kittenDisplaySeconds",
+            name = "Display seconds in kitten timers",
+            description = "Displays seconds in the timers for your kittens",
+            position = 6
+    )
+    default boolean displaySeconds() {
+        return true;
+    }
+
+    @ConfigItem(
             keyName = "secondsAlive",
             name = "",
             description = "",
