@@ -524,7 +524,7 @@ public class KittenPlugin extends Plugin {
             hungryNotificationSend = true;
         }
 
-        Widget playerDialog = client.getWidget(WIDGET_ID_DIALOG_NOTIFICATION_GROUP_ID, WIDGET_ID_DIALOG_PLAYER_TEXT);
+        Widget playerDialog = client.getWidget(WidgetID.DIALOG_PLAYER_GROUP_ID, WIDGET_ID_DIALOG_PLAYER_TEXT);
 
         boolean wake = true;
         if (playerDialog != null) {
