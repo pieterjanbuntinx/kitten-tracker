@@ -71,6 +71,7 @@ public class KittenPlugin extends Plugin {
     private static final String DIALOG_CAT_OVERGROWN = "Your cat has grown into a mighty feline, but it will no longer be able to chase vermin.";
     private static final String DIALOG_AFTER_TAKING_A_GOOD_LOOK = "After taking a good look at your kitten you guess that its age is: ";
     private static final String DIALOG_HAND_OVER_CAT_CIVILIAN = "You hand over the cat.You are given";
+    private static final String DIALOG_GERTRUDE_GIVES_YOU_ANOTHER_KITTEN = "Gertrude gives you another kitten.";
 
     private static final String CHAT_STROKE_CAT = "You softly stroke your cat.";
     private static final String CHAT_THE_KITTEN_GOBBLES_UP_THE_FISH = "The kitten gobbles up the fish.";
@@ -193,7 +194,7 @@ public class KittenPlugin extends Plugin {
 
     private void checkForNewFollower() {
         followerID = getCurrentFollowerId();
-        if (followerID != 0) // Varbit needs to fill up first after logging in
+        if (followerID > 0) // Varbit needs to fill up first after logging in
         {
             previousFollowerId = followerID; // config.felineId();
             newFollower();
@@ -271,6 +272,10 @@ public class KittenPlugin extends Plugin {
             case WILY_CAT:
             case OVERGROWN_CAT:
             case NON_FELINE:
+                kittenSpawnedTime = null;
+                kittenLastFedTime = null;
+                kittenLastAttentionTime = null;
+                catSpawnedTime = null;
                 break;
         }
 
@@ -285,16 +290,19 @@ public class KittenPlugin extends Plugin {
         switch (followerKind) {
             case KITTEN: {
                 config.felineId(followerID);
-
-                Duration timeAlive = Duration.between(kittenSpawnedTime, Instant.now());
-                int secondsAlive = Math.toIntExact(timeAlive.getSeconds());
-                config.secondsAlive(timeSpendGrowing + secondsAlive);
+                if (kittenSpawnedTime != null) {
+                    Duration timeAlive = Duration.between(kittenSpawnedTime, Instant.now());
+                    int secondsAlive = Math.toIntExact(timeAlive.getSeconds());
+                    config.secondsAlive(timeSpendGrowing + secondsAlive);
+                } else {
+                    log.debug("TimeAlive is null, no follower...");
+                }
 
                 if (kittenLastFedTime != null) {
                     Duration timeFed = Duration.between(kittenLastFedTime, Instant.now());
                     int secondsFed = Math.toIntExact(timeFed.getSeconds());
                     config.secondsHungry(secondsFed);
-                } else {
+                } else if (kittenSpawnedTime != null) {
                     // kitten was not fed, so we add the time it has been out to the time it was already hungry for
                     Duration timeSinceSpawn = Duration.between(kittenSpawnedTime, Instant.now());
                     int secondsSinceSpawn = Math.toIntExact(timeSinceSpawn.getSeconds());
@@ -305,7 +313,7 @@ public class KittenPlugin extends Plugin {
                     Duration timeAttention = Duration.between(kittenLastAttentionTime, Instant.now());
                     int secondsAttention = Math.toIntExact(timeAttention.getSeconds());
                     config.secondsNeglected(secondsAttention);
-                } else {
+                } else if (kittenSpawnedTime != null) {
                     // kitten was not paid attention, so we add the time it has been out to the time it was already neglected for
                     Duration timeSinceSpawn = Duration.between(kittenSpawnedTime, Instant.now());
                     int secondsSinceSpawn = Math.toIntExact(timeSinceSpawn.getSeconds());
@@ -316,10 +324,13 @@ public class KittenPlugin extends Plugin {
             }
             case NORMAL_CAT: {
                 config.felineId(followerID);
-                Duration timeAlive = Duration.between(catSpawnedTime, Instant.now());
-                int secondsAlive = Math.toIntExact(timeAlive.getSeconds());
-                config.secondsAlive(timeSpendGrowing + secondsAlive);
-                catSpawnedTime = null;
+                if (kittenSpawnedTime != null) {
+                    Duration timeAlive = Duration.between(catSpawnedTime, Instant.now());
+                    int secondsAlive = Math.toIntExact(timeAlive.getSeconds());
+                    config.secondsAlive(timeSpendGrowing + secondsAlive);
+                } else {
+                    log.debug("TimeAlive is null, no follower...");
+                }
                 break;
             }
             case LAZY_CAT:
@@ -505,7 +516,19 @@ public class KittenPlugin extends Plugin {
         Widget notificationDialog = client.getWidget(WIDGET_ID_DIALOG_NOTIFICATION_GROUP_ID, WIDGET_ID_DIALOG_NOTIFICATION_TEXT);
         if (notificationDialog != null) {
             String notificationText = Text.removeTags(notificationDialog.getText()); // remove color and linebreaks
-            if (notificationText.equals(DIALOG_CAT_GROWN)) {
+            if (notificationText.equals(DIALOG_GERTRUDE_GIVES_YOU_ANOTHER_KITTEN)) { // new kitten
+                config.secondsAlive(0);
+                config.secondsHungry(0);
+                config.secondsNeglected(0);
+                config.lastAttentionType(KittenAttentionType.NEW_KITTEN);
+
+                kittenSpawnedTime = Instant.now();
+                kittenLastFedTime = Instant.now();
+                kittenLastAttentionTime = Instant.now();
+                addKittenGrowthBox(TIME_TO_ADULTHOOD_IN_SECONDS);
+                addHungryTimer(HUNGRY_TIME_BEFORE_KITTEN_RUNS_AWAY_IN_SECONDS);
+                addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_MULTIPLE_STROKES_IN_SECONDS);
+            } else if (notificationText.equals(DIALOG_CAT_GROWN)) {
                 followerKind = FollowerKind.NORMAL_CAT;
                 checkForNewFollower();
                 infoBoxManager.removeIf(t -> t instanceof KittenAttentionTimer);
