@@ -24,8 +24,8 @@
  */
 package com.kittentracker;
 
-import net.runelite.client.ui.overlay.infobox.Timer;
 import net.runelite.client.plugins.Plugin;
+import net.runelite.client.ui.overlay.infobox.Timer;
 
 import java.awt.image.BufferedImage;
 import java.time.Duration;
@@ -35,6 +35,7 @@ class KittenGrowthTimer extends Timer {
     private final Felines kitten;
 
     public KittenGrowthTimer(Felines kitten, BufferedImage petImage, Plugin plugin, Duration seconds) {
+        // TODO add image of current cat to overlaypanel
         super(seconds.toMillis(), ChronoUnit.MILLIS, petImage, plugin);
         this.kitten = kitten;
     }

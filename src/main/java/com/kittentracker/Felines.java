@@ -59,7 +59,7 @@ public enum Felines {
     CAT_1624(1624, ItemID.PET_CAT_1566),
 
     //hell
-    HELLKITTEN(5597, ItemID.HELLKITTEN),
+    HELL_KITTEN(5597, ItemID.HELLKITTEN),
     HELL_CAT(1625, ItemID.HELL_CAT);
 
 
