@@ -66,7 +66,7 @@ public class KittenPlugin extends Plugin {
     private static final int WIDGET_ID_DIALOG_NOTIFICATION_TEXT = 1;
 
     private static final String DIALOG_CAT_STROKE = "That cat sure loves to be stroked.";
-    private static final String DIALOG_CAT_BALL_OF_WOOL = "That kitten loves to play with that ball of wool. I think itis its favourite.";
+    private static final String DIALOG_CAT_BALL_OF_WOOL = "That kitten loves to play with that ball of wool. I think it is its favourite.";
     private static final String DIALOG_CAT_GROWN = "Your kitten has grown into a healthy cat that can hunt for itself.";
     private static final String DIALOG_CAT_OVERGROWN = "Your cat has grown into a mighty feline, but it will no longer be able to chase vermin.";
     private static final String DIALOG_AFTER_TAKING_A_GOOD_LOOK = "After taking a good look at your kitten you guess that its age is: ";
