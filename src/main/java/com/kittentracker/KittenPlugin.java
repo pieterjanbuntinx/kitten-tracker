@@ -66,7 +66,7 @@ public class KittenPlugin extends Plugin {
     private static final int WIDGET_ID_DIALOG_NOTIFICATION_TEXT = 1;
 
     private static final String DIALOG_CAT_STROKE = "That cat sure loves to be stroked.";
-    private static final String DIALOG_CAT_BALL_OF_WOOL = "That kitten loves to play with that ball of wool. I think itis its favourite.";
+    private static final String DIALOG_CAT_BALL_OF_WOOL = "That kitten loves to play with that ball of wool. I think itis its favourite."; // The typo is intentional and how the game reads it...
     private static final String DIALOG_CAT_GROWN = "Your kitten has grown into a healthy cat that can hunt for itself.";
     private static final String DIALOG_CAT_OVERGROWN = "Your cat has grown into a mighty feline, but it will no longer be able to chase vermin.";
     private static final String DIALOG_AFTER_TAKING_A_GOOD_LOOK = "After taking a good look at your kitten you guess that its age is: ";
@@ -368,6 +368,7 @@ public class KittenPlugin extends Plugin {
         kittenAttentionTimer = new KittenAttentionTimer(itemManager.getImage(1759), this, Duration.ofSeconds(seconds));
     }
 
+    // This is where the player interaction checks occur
     @Subscribe
     public void onChatMessage(ChatMessage event) {
         if (event.getType() != ChatMessageType.GAMEMESSAGE) {
@@ -687,6 +688,11 @@ public class KittenPlugin extends Plugin {
         }
     }
 
+    /*
+    // 2023-01-24
+    // Commenting this out for now until a better assessment can be made if it is needed or not.
+    // Personal testing has shown that time does not need to be added back after Widgets (main ones tested was
+    //   dialog boxes and using a bank interface). Not sure if cutscenes count as a widget and if they affect it.
     @Subscribe
     private void onWidgetLoaded(WidgetLoaded ev) {
         openedWidgets.put(ev.getGroupId(), Instant.now());
@@ -702,6 +708,7 @@ public class KittenPlugin extends Plugin {
             openedWidgets.remove(ev.getGroupId());
         }
     }
+    */
 
     private void addDurationToTimers(Duration duration) {
         if (duration == null) {
@@ -737,7 +744,7 @@ public class KittenPlugin extends Plugin {
         switch (state) {
             case LOGGING_IN:
             case HOPPING:
-            case CONNECTION_LOST:
+            case CONNECTION_LOST: // CHECK: this may be a condition causing the timer not to stop when the window is closed
                 ready = true;
                 break;
             case LOGGED_IN:
@@ -765,7 +772,13 @@ public class KittenPlugin extends Plugin {
             return 0L;
         }
         if (isKitten()) {
-            return Math.abs(growthTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
+            // `cull` returns true if timer is less than or equal to zero
+            // This will keep the timer from going negative
+            if (growthTimer.cull()) {
+                return 0L;
+            } else {
+                return Math.abs(growthTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
+            }
         }
         return 0L;
     }
@@ -794,7 +807,13 @@ public class KittenPlugin extends Plugin {
             return 0L;
         }
         if (isKitten()) {
-            return Math.abs(kittenHungryTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
+            // `cull` returns true if timer is less than or equal to zero
+            // This will keep the timer from going negative
+            if (kittenHungryTimer.cull()) {
+                return 0L;
+            } else {
+                return Math.abs(kittenHungryTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
+            }
         }
         return 0L;
     }
@@ -804,7 +823,13 @@ public class KittenPlugin extends Plugin {
             return 0L;
         }
         if (isKitten()) {
-            return Math.abs(kittenAttentionTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
+            // `cull` returns true if timer is less than or equal to zero
+            // This will keep the timer from going negative
+            if (kittenAttentionTimer.cull()) {
+                return 0L;
+            } else {
+                return Math.abs(kittenAttentionTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
+            }
         } else {
             return 0L;
         }
