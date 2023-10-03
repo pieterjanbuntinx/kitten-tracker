@@ -36,9 +36,7 @@ public interface KittenConfig extends Config {
             description = "Displays a countdown for your kitten to grow into a cat",
             position = 1
     )
-    default boolean kittenOverlay() {
-        return true;
-    }
+    default boolean kittenOverlay() { return true; }
 
     @ConfigItem(
             keyName = "catOverlay",
@@ -56,9 +54,7 @@ public interface KittenConfig extends Config {
             description = "Displays a countdown until your kitten leaves you for being underfed",
             position = 3
     )
-    default boolean kittenHungryOverlay() {
-        return true;
-    }
+    default boolean kittenHungryOverlay() { return true; }
 
     @ConfigItem(
             keyName = "kittenAttentionOverlay",
@@ -157,7 +153,6 @@ public interface KittenConfig extends Config {
             description = ""
     )
     void felineId(int id);
-
     @ConfigItem(
             keyName = "lastAttentionType",
             name = "",
@@ -174,6 +169,59 @@ public interface KittenConfig extends Config {
             description = ""
     )
     void lastAttentionType(KittenAttentionType lastAttentionType);
+
+
+    @ConfigItem(
+            keyName = "growthTicksAlive",
+            name = "growthTicksAlive",
+            description = "growthTicksAlive",
+            hidden = true
+    )
+    default int growthTicksAlive() {
+        return -1;
+    }
+
+    @ConfigItem(
+            keyName = "growthTicksAlive",
+            name = "growthTicksAlive",
+            description = "growthTicksAlive"
+    )
+    void growthTicksAlive(int ticks);
+
+
+    @ConfigItem(
+            keyName = "nextHungryTick",
+            name = "nextHungryTick",
+            description = "nextHungryTick",
+            hidden = true
+    )
+    default int nextHungryTick() {
+        return -1;
+    }
+
+    @ConfigItem(
+            keyName = "nextHungryTick",
+            name = "nextHungryTick",
+            description = "nextHungryTick"
+    )
+    void nextHungryTick(int ticks);
+
+    @ConfigItem(
+            keyName = "nextAttentionTick",
+            name = "nextAttentionTick",
+            description = "nextAttentionTick",
+            hidden = true
+    )
+    default int nextAttentionTick() {
+        return -1;
+    }
+
+    @ConfigItem(
+            keyName = "nextAttentionTick",
+            name = "nextAttentionTick",
+            description = "nextAttentionTick"
+    )
+    void nextAttentionTick(int ticks);
 
 }
 

@@ -97,33 +97,53 @@ public class KittenPlugin extends Plugin {
     private static final int HUNGRY_TIME_BEFORE_FINAL_WARNING_IN_MINUTES = 27; // 27 MINUTES
     private static final int HUNGRY_TIME_BEFORE_KITTEN_RUNS_AWAY_IN_SECONDS = 30 * 60; // 30 MINUTES
 
-    public static final int ATTENTION_FIRST_WARNING_TIME_LEFT_IN_SECONDS = 14 * 60; // 14 MINUTES
-    public static final int ATTENTION_FINAL_WARNING_TIME_LEFT_IN_SECONDS = 7 * 60; // 7 MINUTES
+    public static final int ATTENTION_FIRST_WARNING_TIME_LEFT_IN_SECONDS = 6 * 90; // 9 MINUTES
+    public static final int ATTENTION_FINAL_WARNING_TIME_LEFT_IN_SECONDS = 3 * 90; // 4.5 MINUTES
     public static final long ATTENTION_TIME_ONE_MINUTE_WARNING_MS = 1 * 60 * 1000; // 1 MINUTE
-    public static final int ATTENTION_TIME_NEW_KITTEN_IN_SECONDS = 25 * 60; // 25 MINUTES
+    public static final int ATTENTION_TIME_NEW_KITTEN_IN_SECONDS = 17 * 90; // 25.5 MINUTES
     public static final int ATTENTION_TIME_SINGLE_STROKE_IN_SECONDS = 18 * 60; // 18 MINUTES
-    public static final int ATTENTION_TIME_MULTIPLE_STROKES_IN_SECONDS = 25 * 60; // 25 MINUTES
+    public static final int ATTENTION_TIME_MULTIPLE_STROKES_IN_SECONDS = 15 * 90; // 22.5 MINUTES
     public static final int ATTENTION_TIME_BALL_OF_WOOL_IN_SECONDS = 51 * 60; // 51 MINUTES
-    public static final int ATTENTION_TIME_FROM_WARNING_TO_RUNNING_AWAY_IN_SECONDS = (7 + 7) * 60; // 14 MINUTES
-    private static final int ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_NEW_KITTEN_IN_SECONDS = ATTENTION_TIME_NEW_KITTEN_IN_SECONDS + ATTENTION_TIME_FROM_WARNING_TO_RUNNING_AWAY_IN_SECONDS; // 32 MINUTES
-    private static final int ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS = ATTENTION_TIME_SINGLE_STROKE_IN_SECONDS + ATTENTION_TIME_FROM_WARNING_TO_RUNNING_AWAY_IN_SECONDS; // 32 MINUTES
-    private static final int ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_MULTIPLE_STROKES_IN_SECONDS = ATTENTION_TIME_MULTIPLE_STROKES_IN_SECONDS + ATTENTION_TIME_FROM_WARNING_TO_RUNNING_AWAY_IN_SECONDS; // 39 MINUTES
-    private static final int ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_BALL_OF_WOOL_IN_SECONDS = ATTENTION_TIME_BALL_OF_WOOL_IN_SECONDS + ATTENTION_TIME_FROM_WARNING_TO_RUNNING_AWAY_IN_SECONDS; // 65 MINUTES
+    private static final int ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_NEW_KITTEN_IN_SECONDS = ATTENTION_TIME_NEW_KITTEN_IN_SECONDS + ATTENTION_FIRST_WARNING_TIME_LEFT_IN_SECONDS; // 36 MINUTES
+    private static final int ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS = ATTENTION_TIME_SINGLE_STROKE_IN_SECONDS + ATTENTION_FIRST_WARNING_TIME_LEFT_IN_SECONDS; // 28.5 MINUTES
+    private static final int ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_MULTIPLE_STROKES_IN_SECONDS = ATTENTION_TIME_MULTIPLE_STROKES_IN_SECONDS + ATTENTION_FIRST_WARNING_TIME_LEFT_IN_SECONDS; // 31.5 MINUTES
+    private static final int ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_BALL_OF_WOOL_IN_SECONDS = ATTENTION_TIME_BALL_OF_WOOL_IN_SECONDS + ATTENTION_FIRST_WARNING_TIME_LEFT_IN_SECONDS; // 61.5 MINUTES
 
     private static final int TIME_TO_ADULTHOOD_IN_SECONDS = 3 * 3600; // 3 HOURS
     private static final int TIME_TILL_OVERGROWN_IN_SECONDS = (int) (2.5 * 3600); // 2-3 HOURS -> 2.5 HOURS
 
+    private static final int GROWTH_TICK_IN_SECONDS = 90;  // kitten can only progress growth once every 90s.
+    private static final int TICKS_TO_ADULTHOOD = 120; // 3 hours - each growth tick is 90 seconds.
+    private static final int TICKS_TO_OVERGROWN = 100;  // 2.5 hours - assuming above timing is correct.
+    private static final int TICKS_TO_HUNGER_RUN_AWAY = 20; // 30 min - each growth tick is 90 seconds.
+    private static final int TICKS_HUNGER_FIRST_WARNING = 4; // 6 min
+    private static final int TICKS_HUNGER_FINAL_WARNING = 2; // 3 min
+
+    /*  See notes on attention timers/notifications at the bottom of this file in the comments.  tl;dr: it's variable
+    based on a few factors, but testing seems consistent, so it could be "solved."
+     */
+
+    private static final int TICKS_TO_ATTENTION_RUN_AWAY_MULTIPLE_STROKES = 21; // 33m - each growth tick is 90 seconds.
+    private static final int TICKS_TO_ATTENTION_RUN_AWAY_SINGLE_STROKE = 16; // 24m - unsure if accurate.
+    private static final int TICKS_TO_ATTENTION_RUN_AWAY_BALL_OF_WOOL = 34 + 7; // 61.5m - also unsure if accurate.
+    private static final int TICKS_ATTENTION_FIRST_WARNING = 6; // 9m
+    private static final int TICKS_ATTENTION_FINAL_WARNING = 3; // 4.5m
+
     private boolean ready;
-    private Instant kittenSpawnedTime;
-    private Instant catSpawnedTime;
-    private Instant kittenLastFedTime;
     private Instant kittenLastAttentionTime;
-    private int timeSpendGrowing = 0;
     private int timeNeglected = 0;
-    private int timeHungry = 0;
     private int followerID = 0;
     private int previousFollowerId = 0;
     private KittenAttentionType lastAttentionType = KittenAttentionType.NEW_KITTEN;
+
+    private int growthTicksAlive = 0;
+    private int nextHungryTick = 0;
+    private int nextAttentionTick = 0;
+    private int secondsInTick = 0;
+    private Duration timeInTick;
+    private Instant growthTickStartTime;
+
+
 
     private Timer kittenAttentionTimer, growthTimer, kittenHungryTimer;
 
@@ -186,7 +206,7 @@ public class KittenPlugin extends Plugin {
             checkForNewFollower();
         }
 
-        if (!playerHasFollower() && followerID != 0) // player lost it's follower
+        if (!playerHasFollower() && followerID != 0) // player lost its follower
         {
             byeFollower();
         }
@@ -216,35 +236,42 @@ public class KittenPlugin extends Plugin {
             case KITTEN:
                 if (followerID == previousFollowerId) // The same kitten is back!
                 {
-                    timeSpendGrowing = config.secondsAlive();
-                    timeNeglected = config.secondsNeglected();
-                    timeHungry = config.secondsHungry();
-                    kittenSpawnedTime = Instant.now();
+                    secondsInTick = 0;
+                    growthTicksAlive = config.growthTicksAlive();
+                    nextHungryTick = config.nextHungryTick();
+                    nextAttentionTick = config.nextAttentionTick();
+                    growthTickStartTime = Instant.now();
                     lastAttentionType = config.lastAttentionType();
-                    addKittenGrowthBox(TIME_TO_ADULTHOOD_IN_SECONDS - timeSpendGrowing);
-                    addHungryTimer(HUNGRY_TIME_BEFORE_KITTEN_RUNS_AWAY_IN_SECONDS - timeHungry);
-                    addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS - timeNeglected);
+                    // no need to subtract secondsInTick here - it will be zero by definition
+
+                    addKittenGrowthBox((TICKS_TO_ADULTHOOD - growthTicksAlive) * GROWTH_TICK_IN_SECONDS);
+                    addAttentionTimer((nextAttentionTick - growthTicksAlive) * 90);
+                    addHungryTimer((nextHungryTick - growthTicksAlive) * 90);
+
                 } else // new kitten, new timer
                 {
-                    config.secondsAlive(0);
-                    config.secondsHungry(0);
-                    config.secondsNeglected(0);
                     config.lastAttentionType(KittenAttentionType.NEW_KITTEN);
-
-                    kittenSpawnedTime = Instant.now();
-                    kittenLastFedTime = Instant.now();
                     kittenLastAttentionTime = Instant.now();
+
                     addKittenGrowthBox(TIME_TO_ADULTHOOD_IN_SECONDS);
                     addHungryTimer(HUNGRY_TIME_BEFORE_KITTEN_RUNS_AWAY_IN_SECONDS);
                     addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_MULTIPLE_STROKES_IN_SECONDS);
+
+                    // new stuff
+                    config.growthTicksAlive(0);
+                    growthTickStartTime = Instant.now();
+                    nextHungryTick = TICKS_TO_HUNGER_RUN_AWAY;
+                    nextAttentionTick = TICKS_TO_ATTENTION_RUN_AWAY_MULTIPLE_STROKES;
                 }
                 break;
             case NORMAL_CAT:
                 if (followerID == previousFollowerId) { // The same cat is back!
-                    timeSpendGrowing = config.secondsAlive();
-                    addKittenGrowthBox((TIME_TO_ADULTHOOD_IN_SECONDS + TIME_TILL_OVERGROWN_IN_SECONDS - timeSpendGrowing));
+                    growthTicksAlive = config.growthTicksAlive();
+                    growthTickStartTime = Instant.now();
+                    addKittenGrowthBox(((TICKS_TO_ADULTHOOD + TICKS_TO_OVERGROWN) - growthTicksAlive) *
+                            GROWTH_TICK_IN_SECONDS);
                 } else { // new cat, new timer
-                    catSpawnedTime = Instant.now();
+                    growthTickStartTime = Instant.now();
                     addKittenGrowthBox(TIME_TILL_OVERGROWN_IN_SECONDS);
                 }
                 break;
@@ -260,22 +287,19 @@ public class KittenPlugin extends Plugin {
         switch (followerKind) {
             case KITTEN:
                 saveGrowthProgress();
-                kittenSpawnedTime = null;
-                kittenLastFedTime = null;
+                growthTickStartTime = null;
                 kittenLastAttentionTime = null;
                 break;
             case NORMAL_CAT:
                 saveGrowthProgress();
-                catSpawnedTime = null;
+                growthTickStartTime = null;
                 break;
             case LAZY_CAT:
             case WILY_CAT:
             case OVERGROWN_CAT:
             case NON_FELINE:
-                kittenSpawnedTime = null;
-                kittenLastFedTime = null;
+                growthTickStartTime = null;
                 kittenLastAttentionTime = null;
-                catSpawnedTime = null;
                 break;
         }
 
@@ -290,46 +314,22 @@ public class KittenPlugin extends Plugin {
         switch (followerKind) {
             case KITTEN: {
                 config.felineId(followerID);
-                if (kittenSpawnedTime != null) {
-                    Duration timeAlive = Duration.between(kittenSpawnedTime, Instant.now());
-                    int secondsAlive = Math.toIntExact(timeAlive.getSeconds());
-                    config.secondsAlive(timeSpendGrowing + secondsAlive);
+                if (growthTickStartTime != null){
+                    config.growthTicksAlive(growthTicksAlive);
+                    config.nextHungryTick(nextHungryTick);
+                    config.nextAttentionTick(nextAttentionTick);
                 } else {
-                    log.debug("TimeAlive is null, no follower...");
-                }
-
-                if (kittenLastFedTime != null) {
-                    Duration timeFed = Duration.between(kittenLastFedTime, Instant.now());
-                    int secondsFed = Math.toIntExact(timeFed.getSeconds());
-                    config.secondsHungry(secondsFed);
-                } else if (kittenSpawnedTime != null) {
-                    // kitten was not fed, so we add the time it has been out to the time it was already hungry for
-                    Duration timeSinceSpawn = Duration.between(kittenSpawnedTime, Instant.now());
-                    int secondsSinceSpawn = Math.toIntExact(timeSinceSpawn.getSeconds());
-                    config.secondsHungry(timeHungry + secondsSinceSpawn);
-                }
-
-                if (kittenLastAttentionTime != null) {
-                    Duration timeAttention = Duration.between(kittenLastAttentionTime, Instant.now());
-                    int secondsAttention = Math.toIntExact(timeAttention.getSeconds());
-                    config.secondsNeglected(secondsAttention);
-                } else if (kittenSpawnedTime != null) {
-                    // kitten was not paid attention, so we add the time it has been out to the time it was already neglected for
-                    Duration timeSinceSpawn = Duration.between(kittenSpawnedTime, Instant.now());
-                    int secondsSinceSpawn = Math.toIntExact(timeSinceSpawn.getSeconds());
-                    config.secondsNeglected(timeNeglected + secondsSinceSpawn);
+                    log.debug("growthTickStartTime is null, no follower...");
                 }
                 config.lastAttentionType(lastAttentionType);
                 break;
             }
             case NORMAL_CAT: {
                 config.felineId(followerID);
-                if (kittenSpawnedTime != null) {
-                    Duration timeAlive = Duration.between(catSpawnedTime, Instant.now());
-                    int secondsAlive = Math.toIntExact(timeAlive.getSeconds());
-                    config.secondsAlive(timeSpendGrowing + secondsAlive);
+                if (growthTickStartTime != null) {
+                    config.growthTicksAlive(growthTicksAlive);
                 } else {
-                    log.debug("TimeAlive is null, no follower...");
+                    log.debug("growthTickStartTime is null, no follower...");
                 }
                 break;
             }
@@ -368,6 +368,47 @@ public class KittenPlugin extends Plugin {
         kittenAttentionTimer = new KittenAttentionTimer(itemManager.getImage(1759), this, Duration.ofSeconds(seconds));
     }
 
+    private void checkToProgressGrowthTick() {
+        if (secondsInTick >= 88) {
+                /* progress growth tick
+                secondsInTick has to be >= 88 (should theoretically be 90, but I think it gets both truncated as well
+                as only getting checked every game tick (.6s) so there's a potential 2s left off) -
+                we don't want this progressing growth ticks whenever the player feeds/plays with the cat.
+                it almost always gives me 89s but on rare occasion 88s or 90s
+                 */
+            growthTickStartTime = Instant.now();
+            growthTicksAlive += 1;
+            followerKind = FollowerKind.getFromFollowerId(followerID);
+            if (followerKind.equals(FollowerKind.KITTEN)) {
+                addKittenGrowthBox((TICKS_TO_ADULTHOOD - growthTicksAlive) * GROWTH_TICK_IN_SECONDS);
+            }
+            else if (followerKind.equals(FollowerKind.NORMAL_CAT)) {
+                addKittenGrowthBox((TICKS_TO_OVERGROWN + TICKS_TO_ADULTHOOD - growthTicksAlive) * GROWTH_TICK_IN_SECONDS);
+            }
+            addKittenGrowthBox((TICKS_TO_ADULTHOOD - growthTicksAlive) * GROWTH_TICK_IN_SECONDS);
+            addAttentionTimer((nextAttentionTick - growthTicksAlive) * 90);
+            addHungryTimer((nextHungryTick - growthTicksAlive) * 90);
+        }
+    }
+    @Subscribe
+    public void onOverheadTextChanged(OverheadTextChanged e) {
+        /* Check for kitten's/cat's overhead text, indicating a growth tick.  The kitten/cat growth only happens as follows:
+        - Every 90 seconds, if you are not in a dialogue/interface, the cat grows one growth tick (90s)
+            - If you are in a dialogue/interface, it will pause and finish that growth tick as soon as you close out of it.
+        - Every time the cat/kitten is picked up, it will reset that growth tick and no progress is made for that tick.
+            - This also includes hopping worlds/logging out.
+        - If you remain in that interface and the cat does not have a chance to grow upon logging out (for ex., you afk out
+          while in a bank interface), the cat's growth tick also does not complete, and it resets upon login.
+        - Every time the cat/kitten successfully progresses through a growth tick, it will always have overhead text.
+            - We will use that overhead text to track growth.
+     */
+
+        if(e.getActor().equals(client.getFollower())) { // if follower has overhead text
+            checkToProgressGrowthTick();
+        }
+    }
+
+
     // This is where the player interaction checks occur
     @Subscribe
     public void onChatMessage(ChatMessage event) {
@@ -377,6 +418,9 @@ public class KittenPlugin extends Plugin {
         String message = Text.removeTags(event.getMessage());
         switch (message) {
             case CHAT_STROKE_CAT: {
+                timeInTick = Duration.between(growthTickStartTime, Instant.now());
+                int secondsInTick = Math.toIntExact(timeInTick.getSeconds());
+
                 if (kittenLastAttentionTime != null) { // if kitten has had attention within the time since spawn
                     long timeSinceLastAttentionSeconds = Duration.between(kittenLastAttentionTime, Instant.now()).toMillis() / 1000 + timeNeglected;
 
@@ -394,18 +438,22 @@ public class KittenPlugin extends Plugin {
                     // check if is valid multistroke
                     if (timeSinceLastAttentionSeconds < maxTimePastForMultiStrokeSeconds) {
                         if (config.kittenAttentionOverlay()) {
-                            addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_MULTIPLE_STROKES_IN_SECONDS);
+                            addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_MULTIPLE_STROKES_IN_SECONDS - secondsInTick);
+                            nextAttentionTick = growthTicksAlive + TICKS_TO_ATTENTION_RUN_AWAY_MULTIPLE_STROKES;
                         }
                         lastAttentionType = KittenAttentionType.MULTIPLE_STROKES;
-                    } else { // set timer to 18 mins
+                    } else { // set timer to single stroke
                         if (config.kittenAttentionOverlay()) {
-                            addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS);
+                            addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS - secondsInTick);
+                            nextAttentionTick = growthTicksAlive + TICKS_TO_ATTENTION_RUN_AWAY_SINGLE_STROKE;
                         }
                         lastAttentionType = KittenAttentionType.SINGLE_STROKE;
                     }
-                } else { // set timer to 18 mins
+                } else { // set timer to single stroke
                     if (config.kittenAttentionOverlay()) {
-                        addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS);
+                        addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS - secondsInTick);
+                        nextAttentionTick = growthTicksAlive + TICKS_TO_ATTENTION_RUN_AWAY_SINGLE_STROKE;
+
                     }
                     lastAttentionType = KittenAttentionType.SINGLE_STROKE;
                 }
@@ -415,11 +463,12 @@ public class KittenPlugin extends Plugin {
             }
             case CHAT_THE_KITTEN_GOBBLES_UP_THE_FISH:
             case CHAT_THE_KITTEN_LAPS_UP_THE_MILK: {
-                kittenLastFedTime = Instant.now();
                 if (config.kittenHungryOverlay()) {
-                    addHungryTimer(HUNGRY_TIME_BEFORE_KITTEN_RUNS_AWAY_IN_SECONDS);
+                    nextHungryTick = growthTicksAlive + TICKS_TO_HUNGER_RUN_AWAY;
+                    timeInTick = Duration.between(growthTickStartTime, Instant.now());
+                    secondsInTick = Math.toIntExact(timeInTick.getSeconds());
+                    addHungryTimer(TICKS_TO_HUNGER_RUN_AWAY * 90 - secondsInTick);
                 }
-                timeHungry = 0;
                 break;
             }
             case CHAT_YOUR_KITTEN_IS_HUNGRY: // 6 minute warning
@@ -428,9 +477,9 @@ public class KittenPlugin extends Plugin {
                     notifier.notify(message);
                 }
                 if (config.kittenHungryOverlay()) {
-                    addHungryTimer(HUNGRY_FIRST_WARNING_TIME_LEFT_IN_SECONDS);
+                    addHungryTimer(HUNGRY_FIRST_WARNING_TIME_LEFT_IN_SECONDS - secondsInTick);
                 }
-                kittenLastFedTime = (Instant.now().minus(HUNGRY_TIME_BEFORE_FIRST_WARNING_IN_MINUTES, ChronoUnit.MINUTES));
+                nextHungryTick = growthTicksAlive + TICKS_HUNGER_FIRST_WARNING;
                 break;
             }
             case CHAT_YOUR_KITTEN_IS_VERY_HUNGRY: { // 3 minute warning
@@ -440,7 +489,7 @@ public class KittenPlugin extends Plugin {
                 if (config.kittenHungryOverlay()) {
                     addHungryTimer(HUNGRY_FINAL_WARNING_TIME_LEFT_IN_SECONDS);
                 }
-                kittenLastFedTime = (Instant.now().minus(HUNGRY_TIME_BEFORE_FINAL_WARNING_IN_MINUTES, ChronoUnit.MINUTES));
+                nextHungryTick = growthTicksAlive + TICKS_HUNGER_FINAL_WARNING;
                 break;
             }
             case CHAT_YOUR_KITTEN_WANTS_ATTENTION: { // 14 minute warning
@@ -450,7 +499,7 @@ public class KittenPlugin extends Plugin {
                 if (config.kittenAttentionOverlay()) {
                     addAttentionTimer(ATTENTION_FIRST_WARNING_TIME_LEFT_IN_SECONDS);
                 }
-                kittenLastAttentionTime = (Instant.now().minus(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS, ChronoUnit.MINUTES)); // used minimum time before kitten runs away, can be either 18, 25 or 51 minutes (+14 after warning)
+                nextAttentionTick = growthTicksAlive + TICKS_ATTENTION_FIRST_WARNING;
                 break;
             }
             case CHAT_YOUR_KITTEN_REALLY_WANTS_ATTENTION: { // 7 minute warning
@@ -460,7 +509,7 @@ public class KittenPlugin extends Plugin {
                 if (config.kittenAttentionOverlay()) {
                     addAttentionTimer(ATTENTION_FINAL_WARNING_TIME_LEFT_IN_SECONDS);
                 }
-                kittenLastAttentionTime = (Instant.now().minus(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS, ChronoUnit.MINUTES)); // used minimum time before kitten runs away, can be either 18, 25 or 51 minutes (+14 after warning)
+                nextAttentionTick = growthTicksAlive + TICKS_ATTENTION_FINAL_WARNING;
                 break;
             }
             case CHAT_YOUR_KITTEN_GOT_LONELY_AND_RAN_OFF:
@@ -469,8 +518,12 @@ public class KittenPlugin extends Plugin {
                 if (config.kittenNotifications()) {
                     notifier.notify(message);
                 }
-                kittenSpawnedTime = null;
-                kittenLastFedTime = null;
+                // new stuff
+                growthTickStartTime = null;
+                nextHungryTick = TICKS_TO_HUNGER_RUN_AWAY;
+                nextAttentionTick = TICKS_TO_ATTENTION_RUN_AWAY_MULTIPLE_STROKES;
+                growthTicksAlive = 0;
+
                 kittenLastAttentionTime = null;
                 previousFollowerId = 0;
                 config.felineId(0); // in case the new kitten has the same NpcID. We need to track growth progress from the beginning.
@@ -486,6 +539,12 @@ public class KittenPlugin extends Plugin {
 
     @Subscribe
     public void onGameTick(GameTick tick) {
+        // need to update secondsInTick regularly to keep timers tracking properly... but make sure it's not null (kitten is not out)
+        if (growthTickStartTime != null) {
+            timeInTick = Duration.between(growthTickStartTime, Instant.now());
+            secondsInTick = Math.toIntExact(timeInTick.getSeconds());
+        }
+
         // Send notification on 1 minute before kitten runs away (attention)
         long timeBeforeNeedingAttention = getTimeBeforeNeedingAttention();
         if (!attentionNotificationSend && timeBeforeNeedingAttention != 0 && timeBeforeNeedingAttention < ATTENTION_TIME_ONE_MINUTE_WARNING_MS) {
@@ -507,36 +566,47 @@ public class KittenPlugin extends Plugin {
             if (playerText.equals(DIALOG_CAT_BALL_OF_WOOL)) {
                 kittenLastAttentionTime = Instant.now();
                 if (config.kittenAttentionOverlay()) {
-                    addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_BALL_OF_WOOL_IN_SECONDS);
+                    nextAttentionTick = growthTicksAlive + TICKS_TO_ATTENTION_RUN_AWAY_BALL_OF_WOOL;
+                    addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_BALL_OF_WOOL_IN_SECONDS - secondsInTick);
                 }
                 timeNeglected = 0;
                 lastAttentionType = KittenAttentionType.BALL_OF_WOOL;
             }
         }
-
         Widget notificationDialog = client.getWidget(WIDGET_ID_DIALOG_NOTIFICATION_GROUP_ID, WIDGET_ID_DIALOG_NOTIFICATION_TEXT);
         if (notificationDialog != null) {
             String notificationText = Text.removeTags(notificationDialog.getText()); // remove color and linebreaks
             if (notificationText.equals(DIALOG_GERTRUDE_GIVES_YOU_ANOTHER_KITTEN)) { // new kitten
-                config.secondsAlive(0);
-                config.secondsHungry(0);
-                config.secondsNeglected(0);
                 config.lastAttentionType(KittenAttentionType.NEW_KITTEN);
-
-                kittenSpawnedTime = Instant.now();
-                kittenLastFedTime = Instant.now();
                 kittenLastAttentionTime = Instant.now();
+
+                growthTicksAlive = 0;
+                growthTickStartTime = Instant.now();
+                nextHungryTick = TICKS_TO_HUNGER_RUN_AWAY;
+                nextAttentionTick = TICKS_TO_ATTENTION_RUN_AWAY_MULTIPLE_STROKES;
+                config.growthTicksAlive(growthTicksAlive);
+                config.nextHungryTick(nextHungryTick);
+                config.nextAttentionTick(nextAttentionTick);
                 addKittenGrowthBox(TIME_TO_ADULTHOOD_IN_SECONDS);
                 addHungryTimer(HUNGRY_TIME_BEFORE_KITTEN_RUNS_AWAY_IN_SECONDS);
                 addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_MULTIPLE_STROKES_IN_SECONDS);
             } else if (notificationText.equals(DIALOG_CAT_GROWN)) {
                 followerKind = FollowerKind.NORMAL_CAT;
-                checkForNewFollower();
+                // commenting this out - this is also called with onVarbitChanged, which will be called when cat grows up
+                // checkForNewFollower();
+                /* this should be 120 at this point anyway, but this is a band-aid covering up a different issue...
+                previousFollowerID is set to followerID in checkForNewFollower() immediately before calling
+                newFollower(), where it checks if previousFollowerID == followerID... so it's always true.  so the plugin
+                ALWAYS thinks you have the same kitten/cat as last time even if that's not true.  the kitten has other
+                resets when running away/being turned in so most people probably haven't noticed this bug. */
+                growthTicksAlive = TICKS_TO_ADULTHOOD;
+                config.growthTicksAlive(growthTicksAlive);
                 infoBoxManager.removeIf(t -> t instanceof KittenAttentionTimer);
                 infoBoxManager.removeIf(t -> t instanceof KittenHungryTimer);
             } else if (notificationText.equals(DIALOG_CAT_OVERGROWN)) {
                 followerKind = FollowerKind.OVERGROWN_CAT;
-                checkForNewFollower();
+                // commenting this out - this is also called with onVarbitChanged, which will be called when cat grows up
+                // checkForNewFollower();
             } else if (notificationText.startsWith(DIALOG_AFTER_TAKING_A_GOOD_LOOK)) {
                 String ageStr = notificationText.substring(DIALOG_AFTER_TAKING_A_GOOD_LOOK.length());
                 int end = ageStr.indexOf("And approximate time until");
@@ -585,20 +655,65 @@ public class KittenPlugin extends Plugin {
                     }
                 }
 
-                Duration timeSinceSpawn = Duration.between(kittenSpawnedTime, Instant.now());
-                int secondsSinceSpawn = Math.toIntExact(timeSinceSpawn.getSeconds());
-                int age = (hours * 3600) + (minutes * 60);
-                timeSpendGrowing = age - secondsSinceSpawn; // substract this because it gets added to the total when calling saveGrowthProgress
-                addKittenGrowthBox(TIME_TO_ADULTHOOD_IN_SECONDS - age);
+                int ageMinutes = (hours * 60) + minutes;
+                int ageSeconds;
+
+                if (ageMinutes / 1.5 != 0) {
+                    // unit given is not an exact number, they truncated it.  add 30s to timer
+                    ageSeconds = ageMinutes * 60 + 30;
+                } else {
+                    // unit given is an exact number
+                    ageSeconds = ageMinutes * 60;
+                }
+
+                int ticksAliveInDialog = (int) ageSeconds / 90;
+                if (ticksAliveInDialog == growthTicksAlive) {
+                    // ticks alive is accurate.  don't adjust it, it's tracking as it should.
+                    return;
+                } else {
+                    double dialogMinutes = ticksAliveInDialog * 1.5;
+                    double inaccurateMinutes = growthTicksAlive * 1.5;
+                    log.debug("Kitten's growth ticks alive is NOT accurate: adjusting from " + growthTicksAlive +
+                            " to " + ticksAliveInDialog + " ticks alive. ("  + inaccurateMinutes + " to " +
+                            dialogMinutes + " min.)");
+                    growthTicksAlive = ticksAliveInDialog;
+                    /* note: this will not give you the age in a round increment.  it should give you the exact growth
+                    progress that your kitten has.  even though the overall age was incorrect, the progress within the
+                    tick is still being accurately tracked, and we will use that here.
+                     */
+                    if (secondsInTick >= 90) {
+                        // don't overshoot growth progress if progress paused because you're in the dialog menu
+                        addKittenGrowthBox((TICKS_TO_ADULTHOOD - growthTicksAlive - 1) * 90);
+                        addAttentionTimer((nextAttentionTick - growthTicksAlive - 1) * 90);
+                        addHungryTimer((nextHungryTick - growthTicksAlive - 1) * 90);
+                    } else {
+                        addKittenGrowthBox((TICKS_TO_ADULTHOOD - growthTicksAlive) * 90 - secondsInTick);
+                        addAttentionTimer((nextAttentionTick - growthTicksAlive) * 90 - secondsInTick);
+                        addHungryTimer((nextHungryTick - growthTicksAlive) * 90 - secondsInTick);
+                    }
+
+                    /* update attn/growth to minimum values if we know they are inaccurate from new kitten growth time.
+                    for example, in the case of turning in a cat on mobile, and then you got a new kitten that
+                    is the same color (same follower ID), nextHungryTick and nextAttentionTick will not have been reset.
+                    if attention required tick OR hunger required tick is too far away to be possible, reset
+                    BOTH to the given values upon getting a new kitten so the user doesn't think they're good to go
+                    for like 2.5h or whatever.  if one is inaccurate, the other will be too.  these will update
+                    accordingly once the user feeds/plays with kitten, or in-game notifications warn of hunger/attention.
+                     */
+                    if (nextAttentionTick - growthTicksAlive > TICKS_TO_ATTENTION_RUN_AWAY_BALL_OF_WOOL ||
+                            nextHungryTick - growthTicksAlive > TICKS_TO_HUNGER_RUN_AWAY) {
+
+                        nextAttentionTick = TICKS_TO_ATTENTION_RUN_AWAY_MULTIPLE_STROKES;
+                        nextHungryTick = TICKS_TO_HUNGER_RUN_AWAY;
+                    }
+                }
             }
         }
-
         Widget dialog = client.getWidget(WidgetID.DIALOG_SPRITE_GROUP_ID, 2);
         if (dialog != null) {
             String notificationText = Text.removeTags(dialog.getText());
             if (notificationText.startsWith(DIALOG_HAND_OVER_CAT_CIVILIAN)) {
-                kittenSpawnedTime = null;
-                kittenLastFedTime = null;
+                growthTickStartTime = null;
                 kittenLastAttentionTime = null;
                 previousFollowerId = 0;
                 config.felineId(0); // in case the new kitten has the same NpcID. We need to track growth progress from the beginning.
@@ -620,10 +735,10 @@ public class KittenPlugin extends Plugin {
         if (event.getKey().equals("kittenInfoBox")) {
             if (event.getNewValue().equals("true")) {
                 if (isKitten()) {
-                    timeSpendGrowing = config.secondsAlive();
-                    Duration timeAlive = Duration.between(kittenSpawnedTime, Instant.now());
-                    int secondsAlive = Math.toIntExact(timeAlive.getSeconds());
-                    addKittenGrowthBox(TIME_TO_ADULTHOOD_IN_SECONDS - secondsAlive - timeSpendGrowing);
+                    growthTicksAlive = config.growthTicksAlive();
+                    timeInTick = Duration.between(growthTickStartTime, Instant.now());
+                    int secondsInTick = Math.toIntExact(timeInTick.getSeconds());
+                    addKittenGrowthBox((TICKS_TO_ADULTHOOD - growthTicksAlive) * GROWTH_TICK_IN_SECONDS - secondsInTick);
                 }
             }
             if (event.getNewValue().equals("false")) {
@@ -636,10 +751,12 @@ public class KittenPlugin extends Plugin {
         if (event.getKey().equals("catInfoBox")) {
             if (event.getNewValue().equals("true")) {
                 if (isCat()) {
-                    timeSpendGrowing = config.secondsAlive();
-                    Duration timeAlive = Duration.between(catSpawnedTime, Instant.now());
-                    int secondsAlive = Math.toIntExact(timeAlive.getSeconds());
-                    addKittenGrowthBox(TIME_TILL_OVERGROWN_IN_SECONDS + TIME_TO_ADULTHOOD_IN_SECONDS - secondsAlive - timeSpendGrowing);
+                    growthTicksAlive = config.growthTicksAlive();
+                    timeInTick = Duration.between(growthTickStartTime, Instant.now());
+                    int secondsInTick = Math.toIntExact(timeInTick.getSeconds());
+                    addKittenGrowthBox(TIME_TILL_OVERGROWN_IN_SECONDS + TIME_TO_ADULTHOOD_IN_SECONDS -
+                            growthTicksAlive * GROWTH_TICK_IN_SECONDS - secondsInTick);
+
                 }
             }
             if (event.getNewValue().equals("false")) {
@@ -651,17 +768,10 @@ public class KittenPlugin extends Plugin {
 
         if (event.getKey().equals("kittenAttentionBox")) {
             if (event.getNewValue().equals("true")) {
-                if (kittenLastAttentionTime != null) {
-                    Duration timeAttention = Duration.between(kittenLastAttentionTime, Instant.now());
-                    int secondsAttention = Math.toIntExact(timeAttention.getSeconds());
-                    addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS - secondsAttention);
-                }
-                if (kittenLastAttentionTime == null) {
-                    timeNeglected = config.secondsNeglected();
-                    Duration timeSinceSpawn = Duration.between(kittenSpawnedTime, Instant.now());
-                    int secondsSinceSpawn = Math.toIntExact(timeSinceSpawn.getSeconds());
-                    addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS - timeNeglected - secondsSinceSpawn);
-                }
+                timeInTick = Duration.between(growthTickStartTime, Instant.now());
+                int secondsInTick = Math.toIntExact(timeInTick.getSeconds());
+                int secondsTillAttention = (nextAttentionTick - growthTicksAlive) * GROWTH_TICK_IN_SECONDS - secondsInTick;
+                addAttentionTimer(secondsTillAttention);
             }
             if (event.getNewValue().equals("false")) {
                 infoBoxManager.removeIf(t -> t instanceof KittenAttentionTimer);
@@ -670,17 +780,10 @@ public class KittenPlugin extends Plugin {
 
         if (event.getKey().equals("kittenHungryBox")) {
             if (event.getNewValue().equals("true")) {
-                if (kittenLastFedTime != null) {
-                    Duration timeHungry = Duration.between(kittenLastFedTime, Instant.now());
-                    int secondsHungry = Math.toIntExact(timeHungry.getSeconds());
-                    addHungryTimer(HUNGRY_TIME_BEFORE_KITTEN_RUNS_AWAY_IN_SECONDS - secondsHungry);
-                }
-                if (kittenLastFedTime == null) {
-                    timeHungry = config.secondsHungry();
-                    Duration timeSinceSpawn = Duration.between(kittenSpawnedTime, Instant.now());
-                    int secondsSinceSpawn = Math.toIntExact(timeSinceSpawn.getSeconds());
-                    addHungryTimer(HUNGRY_TIME_BEFORE_KITTEN_RUNS_AWAY_IN_SECONDS - timeHungry - secondsSinceSpawn);
-                }
+                timeInTick = Duration.between(growthTickStartTime, Instant.now());
+                int secondsInTick = Math.toIntExact(timeInTick.getSeconds());
+                int secondsTillHungry = (nextHungryTick - growthTicksAlive) * GROWTH_TICK_IN_SECONDS - secondsInTick;
+                addAttentionTimer(secondsTillHungry);
             }
             if (event.getNewValue().equals("false")) {
                 infoBoxManager.removeIf(t -> t instanceof KittenHungryTimer);
@@ -743,6 +846,7 @@ public class KittenPlugin extends Plugin {
         GameState state = event.getGameState();
         switch (state) {
             case LOGGING_IN:
+                growthTickStartTime = Instant.now();
             case HOPPING:
             case CONNECTION_LOST: // CHECK: this may be a condition causing the timer not to stop when the window is closed
                 ready = true;
@@ -777,7 +881,14 @@ public class KittenPlugin extends Plugin {
             if (growthTimer.cull()) {
                 return 0L;
             } else {
-                return Math.abs(growthTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
+                timeInTick = Duration.between(growthTickStartTime, Instant.now());
+                int secondsInTick = Math.toIntExact(timeInTick.getSeconds());
+                if (secondsInTick >= 90) {
+                    // paused at the end of the tick, but it hasn't progressed yet (player is in menus)
+                    return (long) (TICKS_TO_ADULTHOOD - growthTicksAlive - 1) * 90 * 1000;
+                } else {
+                    return Math.abs(growthTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
+                }
             }
         }
         return 0L;
@@ -795,7 +906,22 @@ public class KittenPlugin extends Plugin {
         if (growthTimer == null) {
             return 0L;
         }
-        long ret = Math.abs(growthTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
+
+        long ret;
+        timeInTick = Duration.between(growthTickStartTime, Instant.now());
+        int secondsInTick = Math.toIntExact(timeInTick.getSeconds());
+        if (secondsInTick >= 90) {
+            // paused at the end of the tick, but it hasn't progressed yet (player is in menus)
+            ret = (long) (TICKS_TO_ADULTHOOD + TICKS_TO_OVERGROWN - growthTicksAlive - 1) * 90 * 1000;
+            if (ret < 0){
+                return 0L;
+            } else {
+                return ret;
+            }
+        } else {
+            ret = Math.abs(growthTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
+        }
+
         if (isCat()) {
             return ret;
         }
@@ -812,7 +938,17 @@ public class KittenPlugin extends Plugin {
             if (kittenHungryTimer.cull()) {
                 return 0L;
             } else {
-                return Math.abs(kittenHungryTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
+                if (secondsInTick >= 90) {
+                    // paused at the end of the tick, but it hasn't progressed yet (player is in menus)
+                    long ret = (long) (nextHungryTick - growthTicksAlive - 1) * 90 * 1000;
+                    if (ret < 0){
+                        return 0L;
+                    } else {
+                        return ret;
+                    }
+                } else {
+                    return Math.abs(kittenHungryTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
+                }
             }
         }
         return 0L;
@@ -828,10 +964,85 @@ public class KittenPlugin extends Plugin {
             if (kittenAttentionTimer.cull()) {
                 return 0L;
             } else {
-                return Math.abs(kittenAttentionTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
+                if (secondsInTick >= 90) {
+                    // paused at the end of the tick, but it hasn't progressed yet (player is in menus)
+                    long ret = (long) (nextAttentionTick - growthTicksAlive - 1) * 90 * 1000;
+                    if (ret < 0){
+                        return 0L;
+                    } else {
+                        return ret;
+                    }
+                } else {
+                    return Math.abs(kittenAttentionTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
+                }
+
             }
         } else {
             return 0L;
         }
     }
 }
+/*
+KITTEN GROWTH MECHANICS:
+- Kitten grows one growth tick every 90s.
+  - Upon reaching 90s, this growth tick does not progress if the player is in an interface (dialog, bank menu, etc.).
+    - It will progress immediately after exiting that interface, as long as the kitten has a chance to grow
+      (ex: growth does not progress if player AFKs to logout in a bank interface)
+    - If you are only in an interface during a different time of that tick progress (ex: banking during seconds 40-70 of
+      the 90s tick), the kitten's growth will be unaffected by you being in that interface, as long as you're not in an
+      interface at 90s.
+  - The kitten's progress within that 90s tick gets reset each time it is picked up, or when the player logs out/hops worlds.
+- Kitten has overhead text each and every time it grows a growth tick, so as our as the timer ticks down,
+   it waits for that overhead text before continuing to the next growth tick.  This is a much easier "catch-all" than
+   checking for every kind of interface and hoping we don't miss any.
+- Kitten can only request hunger/attention at the time when a growth tick progresses
+DIALOG BOX TO CHECK AGE:
+- Kitten's age in dialogue is not exact in minutes as shown in the dialog box.
+  - As the kitten can only grow in increments of 90s, half of the ages shown in dialog is truncated.
+  - Ex: If the dialog says your kitten is 1 minute old, it is really 1.5 minutes old.
+    There is no dialog that will ever say it is 2 mins old - the increments shown to the player are
+    0 minutes (0 growth ticks), 1 minute (1 growth tick, actually 1.5 mins), 3 minutes (2 growth ticks), 4 minutes
+    (3 growth ticks, actually 4.5 mins), and so on.
+  - The kitten has already progressed time inside of that growth tick when asked, so that time given is not exact either.
+ATTENTION TIMER:
+- Kitten's attention requests (and run away time) are not 7 mins apart as shown on the wiki and previously in this plugin.
+  - They are *supposed* to be 4.5 mins apart, but these can be delayed by a hunger notification which seems to always take
+    precedence.  (As hunger notifications always take precedence, hunger notifications are always consistent no matter
+    what in my testing.)
+     - Attn notifications can also be pushed back by upcoming hunger notifications, and not even ones that would coincide
+       with the attn time...  For example:  Kitten would normally request attn at 22.5 min if well-fed upon first
+       getting it (feed at 15 min, so you won't get another hunger notification until 39 mins).  However, if you don't feed
+       it, it requests hunger at 24 minutes, and then attention at 25.5m, pushing the attn notification back by a full 2 ticks.
+       If you let it go hungry, and it requests food a second time at 27 mins, the attn notification gets pushed back
+       again.  As the last attn req was at 25.5m, you'd expect it to have the lonely notification at 25.5m+4.5m=30m.
+       But it does not do that, it requests that it is lonely at 31.5m instead.  The request that occurred a full 2 ticks
+       before the lonely notification *should* have come still pushes the lonely notification back by a tick.
+       If this is hard to understand in text form, here's a visual representation, which I recommend looking at regardless
+       of whether the text explanation made sense to you:  https://i.imgur.com/6PFRJqB.png  You can easily replicate
+       these results yourself as well.
+  - So if you keep your cat well-fed and never get notified of hunger, these notifications are consistently 4.5 mins apart.
+- Single-stroke mechanics add a variable time to the kitten running away.  It seems as if the more lonely your cat is
+  (closer to running away), the less time a single stroke will add to its attention timer.  I've had single strokes last
+  18m before requesting attn, and I've had it wait as little at 7.5m before requesting attn.  It's also possible these
+  are getting shoved around by hunger notifications as I wasn't aware of that mechanic at the time, so I wasn't tracking it.
+  - A few data points I've gathered (ignoring hunger mechanics, as the kitten was well-fed during these times):
+     - Kitten is 1.5m from running away.
+        - Single stroke now takes 7.5m to request attention again (16.5m from running away)
+     - Kitten is 30m from running away (6m after double stroke).
+        - Single stroke now takes 21m to request attention again (30m from running away)
+     - Kitten is 31.5m from running away (4.5m after double stroke).
+        - Single stroke gives full amount of 22.5m to request attention again.
+     - I believe this can all be interpolated linearly, with it maxing out at 22.5 minutes until the next attention request.
+       Some testing (not very extensive) has shown this to be true so far.
+        - Formula would be:  Time until run away after stroked = Time until run away just before stroked + 15 mins,
+          maxing out at 22.5 mins.
+- Attention given for 2 or more strokes is always consistent at 22.5 mins (barring hunger notifications delaying it).
+- THE ONLY CHANGES I MADE IN THIS REVISION REGARDING ATTENTION are changing the request timers to 4.5 mins apart,
+  as well as changing double stroke to 22.5 mins until attention request (31.5 mins until run away).  I have
+  NOT changed anything further in the plugin as it would require further testing/research to know why timers get
+  delayed/why single stroke attention behaves as it does. I just wanted to include those notes as in case someone else
+  wants to take my research/notes and go further with it.
+- First Two Weeks, 8/xx/23, you can reach me on discord at firsttwoweeks if you want further clarification or to bounce
+ideas off of me for the attention stuff.  Personally I've grown over ~160 kittens on my new account, so I might be done for
+now, but I wanted to leave these notes here so that whoever else can take my notes and go further with it.
+ */
