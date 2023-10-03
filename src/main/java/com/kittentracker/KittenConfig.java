@@ -87,67 +87,6 @@ public interface KittenConfig extends Config {
     }
 
     @ConfigItem(
-            keyName = "secondsAlive",
-            name = "",
-            description = "",
-            hidden = true
-    )
-    default int secondsAlive() {
-        return -1;
-    }
-
-    @ConfigItem(
-            keyName = "secondsAlive",
-            name = "",
-            description = ""
-    )
-    void secondsAlive(int seconds);
-
-    @ConfigItem(
-            keyName = "secondsHungry",
-            name = "",
-            description = "",
-            hidden = true
-    )
-    default int secondsHungry() {
-        return -1;
-    }
-
-    @ConfigItem(
-            keyName = "secondsHungry",
-            name = "",
-            description = ""
-    )
-    void secondsHungry(int seconds);
-
-    @ConfigItem(
-            keyName = "secondsNeglected",
-            name = "",
-            description = "",
-            hidden = true
-    )
-    default int secondsNeglected() {
-        return -1;
-    }
-
-    @ConfigItem(
-            keyName = "secondsNeglected",
-            name = "",
-            description = ""
-    )
-    void secondsNeglected(int seconds);
-
-    @ConfigItem(
-            keyName = "felineId",
-            name = "",
-            description = "",
-            hidden = true
-    )
-    default int felineId() {
-        return -1;
-    }
-
-    @ConfigItem(
             keyName = "felineId",
             name = "",
             description = ""
