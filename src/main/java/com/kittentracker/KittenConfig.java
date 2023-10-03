@@ -86,6 +86,17 @@ public interface KittenConfig extends Config {
         return true;
     }
 
+
+    @ConfigItem(
+            keyName = "felineId",
+            name = "",
+            description = "",
+            hidden = true
+    )
+    default int felineId() {
+        return -1;
+    }
+
     @ConfigItem(
             keyName = "felineId",
             name = "",
