@@ -27,14 +27,12 @@ package com.kittentracker;
 
 import com.google.inject.Provides;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.ChatMessageType;
-import net.runelite.api.Client;
-import net.runelite.api.GameState;
-import net.runelite.api.ItemID;
+import net.runelite.api.*;
+import net.runelite.api.*;
 import net.runelite.api.events.*;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetID;
-import net.runelite.api.widgets.WidgetModalMode;
+import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.Notifier;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
@@ -54,6 +52,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
+import java.util.*;
+import java.util.Iterator;
+import java.util.Enumeration;
+
 
 @Slf4j
 @PluginDescriptor(
@@ -119,13 +121,22 @@ public class KittenPlugin extends Plugin {
     private static final int TICKS_HUNGER_FIRST_WARNING = 4; // 6 min
     private static final int TICKS_HUNGER_FINAL_WARNING = 2; // 3 min
 
-    /*  See notes on attention timers/notifications at the bottom of this file in the comments.  tl;dr: it's variable
+    /*  See notes on attention timers/notifications in the README.  tl;dr: it's variable
     based on a few factors, but testing seems consistent, so it could be "solved."
+    For now, I'm adding in 3 ticks as an "expected" delay - that is what happens next after being fed & stroked 2x
+    at the same time, then waiting for notifications for your cat to tell you it needs food/attention,
+    which seems like it would be the most common case.  Most people won't probably proactively feed
+    their kitten before getting the notification.  I'll only add this in for the multiple stroke constant,
+    as the others will likely not be synced up with the hunger timer as closely.
      */
+    private static final int EXPECTED_ATTENTION_DELAY_TICKS = 3;
 
-    private static final int TICKS_TO_ATTENTION_RUN_AWAY_MULTIPLE_STROKES = 21; // 33m - each growth tick is 90 seconds.
-    private static final int TICKS_TO_ATTENTION_RUN_AWAY_SINGLE_STROKE = 16; // 24m - unsure if accurate.
-    private static final int TICKS_TO_ATTENTION_RUN_AWAY_BALL_OF_WOOL = 34 + 7; // 61.5m - also unsure if accurate.
+    /* 36 min - each growth tick is 90s.  Normally it *should* be 21 ticks/31.5 mins, but hunger notifications often delay this.
+    should the hunger notification delays be "solved", this could get adjusted in the future, it's just a work-around
+    for now. */
+    private static final int TICKS_TO_ATTENTION_RUN_AWAY_MULTIPLE_STROKES = 21 + EXPECTED_ATTENTION_DELAY_TICKS;
+    private static final int TICKS_TO_ATTENTION_RUN_AWAY_SINGLE_STROKE = 16; // 24m - it's variable so this isn't exactly accurate.
+    private static final int TICKS_TO_ATTENTION_RUN_AWAY_BALL_OF_WOOL = 40; // 60
     private static final int TICKS_ATTENTION_FIRST_WARNING = 6; // 9m
     private static final int TICKS_ATTENTION_FINAL_WARNING = 3; // 4.5m
 
@@ -141,9 +152,58 @@ public class KittenPlugin extends Plugin {
     private int nextAttentionTick = 0;
     private int secondsInTick = 0;
     private Duration timeInTick;
-    private Instant growthTickStartTime;
+    private Instant growthTickStartTime = null;
+    private Instant lastLoadingTime = null;
+    private ArrayList<Instant> growthTimes = new ArrayList<>();
+    // the first growth tick can be very early upon login - probably something to do with loading the game or plugin.
+    private boolean noGrowthSinceLoggedIn = true;
 
+    /* Widget Group IDs for interfaces that stall kitten growth.  This is not all-inclusive.  It's just a makeshift
+    replacement for watching for overhead text that would normally indicate kitten growth when the player count
+    is very high and cant load all entities and your kitten might not be rendered.  The ones listed individually here
+    are not included in WidgetID.java and I had to determine them manually.
+    Rule of thumb: if you can't move around and keep the interface open, it will delay kitten growth if it is open.
+     */
+    private static final int KOUREND_FAVOUR_TASK_LIST_GROUP_ID = 626;
+    private static final int EQUIPMENT_STATS_GROUP_ID = 84;
+    private static final int COMBAT_ACHIEVEMENTS_OVERVIEW_GROUP_ID = 717;
+    private static final int COMBAT_ACHIEVEMENTS_TASK_LIST_GROUP_ID = 715;
+    private static final int COMBAT_ACHIEVEMENTS_BOSSES_GROUP_ID = 716;
 
+    private static final int COMBAT_ACHIEVEMENTS_REWARDS_GROUP_ID = 714;
+
+    private static final int BOND_POUCH_GROUP_ID = 65;
+    private static final int NAME_CHANGER_GROUP_ID = 589;  // believe it or not this does pause kitten growth
+    private static final int POLL_GROUP_ID = 345;
+    private static final int POLL_HISTORY_GROUP_ID = 310;
+    private static final int STEEL_KEY_RING_GROUP_ID = 127;
+    private static final int MASTER_SCROLL_BOOK_GROUP_ID = 597;
+    private static final int FORESTRY_KIT_GROUP_ID = 823;
+    private static final int FORESTRY_KIT_GROUP_ID_2 = 822; // both 822 & 823 are open when the kit is open
+    private static final int BANK_COLLECTION_BOX_GROUP_ID = 402;
+    private static final int GRAND_EXCHANGE_ITEM_SETS_GROUP_ID = 451;
+    private static final int GRAND_EXCHANGE_ITEM_SETS_2_GROUP_ID = 430;
+    private static final int GRAND_EXCHANGE_HISTORY_GROUP_ID = 383;
+    private static final int XP_LAMP_GROUP_ID = 240;  // same for book of knowledge from dunce random event
+
+    List<Integer> unsafeIDs = new ArrayList<>(Arrays.asList(WidgetID.ACHIEVEMENT_DIARY_SCROLL_GROUP_ID,
+            WidgetID.GUIDE_PRICE_GROUP_ID, WidgetID.KEPT_ON_DEATH_GROUP_ID, WidgetID.COLLECTION_LOG_ID,
+            WidgetID.DIALOG_PLAYER_GROUP_ID, WidgetID.DIALOG_NPC_GROUP_ID, WidgetID.DIALOG_OPTION_GROUP_ID,
+            WidgetID.DIALOG_DOUBLE_SPRITE_GROUP_ID, WidgetID.DIALOG_SPRITE_GROUP_ID,
+            WidgetID.DIARY_QUEST_GROUP_ID, WidgetID.SEED_BOX_GROUP_ID, WidgetID.RUNE_POUCH_GROUP_ID,
+            WidgetID.CLUE_SCROLL_GROUP_ID, WidgetID.CLUE_SCROLL_REWARD_GROUP_ID,
+            WidgetID.BEGINNER_CLUE_MAP_CHAMPIONS_GUILD, WidgetID.BEGINNER_CLUE_MAP_DRAYNOR,
+            WidgetID.BEGINNER_CLUE_MAP_VARROCK_EAST_MINE, WidgetID.BEGINNER_CLUE_MAP_NORTH_OF_FALADOR,
+            WidgetID.BEGINNER_CLUE_MAP_WIZARDS_TOWER, KOUREND_FAVOUR_TASK_LIST_GROUP_ID, EQUIPMENT_STATS_GROUP_ID,
+            COMBAT_ACHIEVEMENTS_OVERVIEW_GROUP_ID, COMBAT_ACHIEVEMENTS_TASK_LIST_GROUP_ID,
+            COMBAT_ACHIEVEMENTS_BOSSES_GROUP_ID, COMBAT_ACHIEVEMENTS_REWARDS_GROUP_ID, BOND_POUCH_GROUP_ID,
+            NAME_CHANGER_GROUP_ID, POLL_GROUP_ID, POLL_HISTORY_GROUP_ID, STEEL_KEY_RING_GROUP_ID,
+            MASTER_SCROLL_BOOK_GROUP_ID, FORESTRY_KIT_GROUP_ID, FORESTRY_KIT_GROUP_ID_2,
+            WidgetID.GRAND_EXCHANGE_GROUP_ID, WidgetID.DEPOSIT_BOX_GROUP_ID, BANK_COLLECTION_BOX_GROUP_ID,
+            GRAND_EXCHANGE_ITEM_SETS_GROUP_ID, GRAND_EXCHANGE_ITEM_SETS_2_GROUP_ID, GRAND_EXCHANGE_HISTORY_GROUP_ID,
+            WidgetID.SEED_VAULT_GROUP_ID, WidgetID.QUEST_COMPLETED_GROUP_ID, WidgetID.LEVEL_UP_GROUP_ID,
+            WidgetID.FAIRY_RING_GROUP_ID, WidgetID.SHOP_GROUP_ID, WidgetID.SLAYER_REWARDS_GROUP_ID,
+            WidgetID.DESTROY_ITEM_GROUP_ID, WidgetID.BANK_PIN_GROUP_ID, XP_LAMP_GROUP_ID, WidgetID.BANK_GROUP_ID));
 
     private Timer kittenAttentionTimer, growthTimer, kittenHungryTimer;
 
@@ -368,26 +428,29 @@ public class KittenPlugin extends Plugin {
         kittenAttentionTimer = new KittenAttentionTimer(itemManager.getImage(1759), this, Duration.ofSeconds(seconds));
     }
 
-    private void checkToProgressGrowthTick() {
-        if (secondsInTick >= 88) {
-                /* progress growth tick
+    private void checkToProgressGrowthTickOnOverheadText() {
+        int secondsBeforeCheckingForGrowth = 87;
+        if (noGrowthSinceLoggedIn){
+            secondsBeforeCheckingForGrowth = 80;  // first growth tick can be very early upon first logging in.
+        }
+        if (secondsInTick >= secondsBeforeCheckingForGrowth && client.getPlayers().size() < 200) {
+                /* Progress growth tick when your kitten has overhead text
                 secondsInTick has to be >= 88 (should theoretically be 90, but I think it gets both truncated as well
                 as only getting checked every game tick (.6s) so there's a potential 2s left off) -
-                we don't want this progressing growth ticks whenever the player feeds/plays with the cat.
-                it almost always gives me 89s but on rare occasion 88s or 90s
+                we don't want this progressing growth ticks whenever the player feeds/plays with the cat (this also
+                gives overhead text from the cat).
+                It almost always gives me 89s but on rare occasion 88s or 90s. On one occasion upon login, I even had
+                it give me 83s.  However, currently I'm going to set it to 87 to be safe.  (and 80s upon login)
+
+                We also will only use this when there's less than 200 players nearby.  Otherwise we'll use the method
+                checkToProgressGrowthInterfaceMethod().  We don't want them both triggering though - for ex.
+                if you have 200 players nearby and your kitten is rendered, I believe it will advance 2 growth ticks,
+                one for each method since they will trigger simultaneously on the same tick and secondsInTick won't
+                have a chance to reset.  I've now written a method to handle that anyway, but we might as well be
+                proactive about it.
                  */
-            growthTickStartTime = Instant.now();
-            growthTicksAlive += 1;
-            followerKind = FollowerKind.getFromFollowerId(followerID);
-            if (followerKind.equals(FollowerKind.KITTEN)) {
-                addKittenGrowthBox((TICKS_TO_ADULTHOOD - growthTicksAlive) * GROWTH_TICK_IN_SECONDS);
-            }
-            else if (followerKind.equals(FollowerKind.NORMAL_CAT)) {
-                addKittenGrowthBox((TICKS_TO_OVERGROWN + TICKS_TO_ADULTHOOD - growthTicksAlive) * GROWTH_TICK_IN_SECONDS);
-            }
-            addKittenGrowthBox((TICKS_TO_ADULTHOOD - growthTicksAlive) * GROWTH_TICK_IN_SECONDS);
-            addAttentionTimer((nextAttentionTick - growthTicksAlive) * 90);
-            addHungryTimer((nextHungryTick - growthTicksAlive) * 90);
+            advanceGrowthTick();
+            // log.debug("Advancing growth tick to " + growthTicksAlive + " - overhead method");
         }
     }
     @Subscribe
@@ -401,15 +464,135 @@ public class KittenPlugin extends Plugin {
           while in a bank interface), the cat's growth tick also does not complete, and it resets upon login.
         - Every time the cat/kitten successfully progresses through a growth tick, it will always have overhead text.
             - We will use that overhead text to track growth.
+        - Sometimes, when you're in a high population area (at a shooting star), not all entities will render, meaning
+          your kitten might not either, and will not have overhead text.  checkToProgressGrowthInterfaceMethod()
+          will take over at that point.
+        - Your kitten/cat will also not have overhead text if you teleport at the same time as a growth tick occurs.
+          For this, instead we will check if you have loaded into a new area recently and use the interface method again.
      */
-
         if(e.getActor().equals(client.getFollower())) { // if follower has overhead text
-            checkToProgressGrowthTick();
+            // log.debug("Kitten says " + e.getOverheadText() + " and secondsInTick is " + secondsInTick);
+            checkToProgressGrowthTickOnOverheadText();
         }
     }
 
+    private void checkToProgressGrowthInterfaceMethod() {
+        /* If your cat hasn't progressed growth when it is able to, and there's a lot of players nearby, sometimes
+        this is because with all the entities loaded in, your kitten gets unloaded.  When that happens, we can't
+        check for growth by its overhead text, as we can't see it.  Instead, we'll just check to make sure you're
+        out of some common widgets (interfaces) that would cause the game to pause the kitten's timer until they're closed.
 
-    // This is where the player interaction checks occur
+        Note: This isn't a reliable way to track growth normally, as there are a LOT of widgets that pause
+        the kitten's growth... and a lot of widgets that do not pause the kitten's growth (minimap, full size map,
+        settings interface, inventory, etc.).  If anyone reading this knows of a reliable way to tell the difference,
+        and not on a case-by-case basis for hundreds of widgets (not to mention new widgets being added to the game),
+        feel free to re-code this section to that.  As of now, we will likely miss some of the widgets that will pause
+        the kitten's growth, but this is better than nothing.
+
+        In its current state, this tracks just very slightly quickly that can add up over time.  This means the timer
+        will likely freeze for a few seconds at the end of the current growth tick upon returning to a low-population
+        area, if you spent a long time in a high population area.  This is better than the alternative - if it moves
+        too quickly it will likely freeze for a full growth tick upon returning to the other method.
+        (Instead of advancing after secondsInTick >=89, I tried 89.5s, but that was too quick.)
+         */
+        HashTable<WidgetNode> componentTable = client.getComponentTable();
+        boolean stallingInterfaceOpen = false;
+        for (WidgetNode widgetNode : componentTable) {
+            for (Integer unsafe : unsafeIDs)
+                if (widgetNode.getId() == unsafe){
+                    // an interface is open that we know to pause kitten growth
+                    stallingInterfaceOpen = true;
+                    break;
+                }
+            if (stallingInterfaceOpen){
+                break;
+            }
+        }
+        if (!stallingInterfaceOpen) {
+            // no interfaces that pause growth found.  kitten can grow.
+            advanceGrowthTick();
+            // log.debug("Advancing growth tick to " + growthTicksAlive + " - interface method");
+        }
+    }
+
+    private void advanceGrowthTick(){
+        growthTickStartTime = Instant.now();
+        growthTicksAlive += 1;
+        followerKind = FollowerKind.getFromFollowerId(followerID);
+        if (followerKind.equals(FollowerKind.KITTEN)) {
+            addKittenGrowthBox((TICKS_TO_ADULTHOOD - growthTicksAlive) * GROWTH_TICK_IN_SECONDS);
+            addAttentionTimer((nextAttentionTick - growthTicksAlive) * 90);
+            addHungryTimer((nextHungryTick - growthTicksAlive) * 90);
+        }
+        else if (followerKind.equals(FollowerKind.NORMAL_CAT)) {
+            addKittenGrowthBox((TICKS_TO_OVERGROWN + TICKS_TO_ADULTHOOD - growthTicksAlive) * GROWTH_TICK_IN_SECONDS);
+        }
+        /* to track the most recent growth times.  if times are too close to each other, we will subtract a growth tick instead.
+        this could happen with the loading condition triggering simultaneously with the overhead condition and advancing
+        2 ticks instead of 1.
+         */
+        growthTimes.add(growthTickStartTime);
+        noGrowthSinceLoggedIn = false;
+    }
+    private void checkifDuplicateGrowthTicks() {
+        /* this method exists for possible overlap between methods (which does happen).  one such example is loading
+        into a new area (running into it, not teleporting), and your kitten has overhead text, and the game is loading/
+        loaded recently so the plugin thinks you may have teleported.  this happens on the same tick, so secondsInTick
+        doesn't have a chance to reset, and the plugin thinks the kitten advanced two growth ticks instead of one (one
+        for loading into a new area when a growth tick could occur, and one for overhead text).  this method corrects
+        that behavior.  If two growth ticks were recorded in a span of 2s or less from each other, one growth tick is
+        undone.  This only checks for a max of two duplicate growth ticks (only checks the last 3 recorded times),
+        since there are only 3 methods that currently advance growth ticks, so we should be covered.
+         */
+
+        if (growthTimes.size() <= 1) {
+            // if there's only one tick recorded, there can't be duplicates.
+            return;
+        }
+        // remove older growth ticks than the last 3 - technically you should currently only need 2 but there are
+        //  3 methods to advance growth ticks - high population on a timer, overhead text, loading on a timer
+        while (growthTimes.size() > 3){
+            growthTimes.remove(0);
+        }
+        int growthTicksToSubtract = 0;
+        for(int i = 0; i < growthTimes.size()-1; i++){
+            if (Math.toIntExact(Duration.between(growthTimes.get(i), growthTimes.get(i+1)).getSeconds()) < 2) {
+                growthTicksToSubtract += 1;
+
+            }
+        }
+        /* now that the existing growth tick times have been compared, let's remove the other growth times
+        as to not subtract these growth ticks again the next time this is called. we'll keep the most recent growth time
+        as it should still be able to be compared to the next future growth time.
+         */
+        while (growthTimes.size() > 1){
+            growthTimes.remove(0);
+        }
+        if (growthTicksToSubtract > 0){
+            subtractGrowthTicks(growthTicksToSubtract);
+        }
+    }
+    private void subtractGrowthTicks(int numTicksToRemove){
+        /* called when we find duplicate growth ticks recorded when it should have been just one.
+        note: we are already partway through the growth tick, so we don't want to reset the growth tick start time,
+        as we do when advancing to the next growth tick.  for that same reason we will also want to subtract
+        secondsInTick here, compared to not doing that in advanceGrowthTick()
+         */
+        growthTicksAlive -= numTicksToRemove;
+        System.out.println("Subtracting growth tick!! (numTicksToRemove: " + numTicksToRemove + ")");
+        followerKind = FollowerKind.getFromFollowerId(followerID);
+        if (followerKind.equals(FollowerKind.KITTEN)) {
+            addKittenGrowthBox((TICKS_TO_ADULTHOOD - growthTicksAlive) * GROWTH_TICK_IN_SECONDS - secondsInTick);
+            addAttentionTimer((nextAttentionTick - growthTicksAlive) * 90 - secondsInTick);
+            addHungryTimer((nextHungryTick - growthTicksAlive) * 90 - secondsInTick);
+        }
+        else if (followerKind.equals(FollowerKind.NORMAL_CAT)) {
+            addKittenGrowthBox((TICKS_TO_OVERGROWN + TICKS_TO_ADULTHOOD - growthTicksAlive) *
+                    GROWTH_TICK_IN_SECONDS - secondsInTick);
+        }
+    }
+
+        // This is where the player interaction checks occur
     @Subscribe
     public void onChatMessage(ChatMessage event) {
         if (event.getType() != ChatMessageType.GAMEMESSAGE) {
@@ -438,22 +621,21 @@ public class KittenPlugin extends Plugin {
                     // check if is valid multistroke
                     if (timeSinceLastAttentionSeconds < maxTimePastForMultiStrokeSeconds) {
                         if (config.kittenAttentionOverlay()) {
-                            addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_MULTIPLE_STROKES_IN_SECONDS - secondsInTick);
                             nextAttentionTick = growthTicksAlive + TICKS_TO_ATTENTION_RUN_AWAY_MULTIPLE_STROKES;
+                            addAttentionTimer((nextAttentionTick - growthTicksAlive) * 90 - secondsInTick);
                         }
                         lastAttentionType = KittenAttentionType.MULTIPLE_STROKES;
                     } else { // set timer to single stroke
                         if (config.kittenAttentionOverlay()) {
-                            addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS - secondsInTick);
                             nextAttentionTick = growthTicksAlive + TICKS_TO_ATTENTION_RUN_AWAY_SINGLE_STROKE;
+                            addAttentionTimer((nextAttentionTick - growthTicksAlive) * 90 - secondsInTick);
                         }
                         lastAttentionType = KittenAttentionType.SINGLE_STROKE;
                     }
                 } else { // set timer to single stroke
                     if (config.kittenAttentionOverlay()) {
-                        addAttentionTimer(ATTENTION_TIME_BEFORE_KITTEN_RUNS_AWAY_SINGLE_STROKE_IN_SECONDS - secondsInTick);
                         nextAttentionTick = growthTicksAlive + TICKS_TO_ATTENTION_RUN_AWAY_SINGLE_STROKE;
-
+                        addAttentionTimer((nextAttentionTick - growthTicksAlive) * 90 - secondsInTick);
                     }
                     lastAttentionType = KittenAttentionType.SINGLE_STROKE;
                 }
@@ -487,29 +669,29 @@ public class KittenPlugin extends Plugin {
                     notifier.notify(message);
                 }
                 if (config.kittenHungryOverlay()) {
-                    addHungryTimer(HUNGRY_FINAL_WARNING_TIME_LEFT_IN_SECONDS);
+                    addHungryTimer(HUNGRY_FINAL_WARNING_TIME_LEFT_IN_SECONDS - secondsInTick);
                 }
                 nextHungryTick = growthTicksAlive + TICKS_HUNGER_FINAL_WARNING;
                 break;
             }
-            case CHAT_YOUR_KITTEN_WANTS_ATTENTION: { // 14 minute warning
+            case CHAT_YOUR_KITTEN_WANTS_ATTENTION: { // 9 minute warning
                 if (config.kittenNotifications()) {
                     notifier.notify(message);
-                }
-                if (config.kittenAttentionOverlay()) {
-                    addAttentionTimer(ATTENTION_FIRST_WARNING_TIME_LEFT_IN_SECONDS);
                 }
                 nextAttentionTick = growthTicksAlive + TICKS_ATTENTION_FIRST_WARNING;
+                if (config.kittenAttentionOverlay()) {
+                    addAttentionTimer((nextAttentionTick - growthTicksAlive) * 90 - secondsInTick);
+                }
                 break;
             }
-            case CHAT_YOUR_KITTEN_REALLY_WANTS_ATTENTION: { // 7 minute warning
+            case CHAT_YOUR_KITTEN_REALLY_WANTS_ATTENTION: { // 4.5 minute warning
                 if (config.kittenNotifications()) {
                     notifier.notify(message);
                 }
-                if (config.kittenAttentionOverlay()) {
-                    addAttentionTimer(ATTENTION_FINAL_WARNING_TIME_LEFT_IN_SECONDS);
-                }
                 nextAttentionTick = growthTicksAlive + TICKS_ATTENTION_FINAL_WARNING;
+                if (config.kittenAttentionOverlay()) {
+                    addAttentionTimer((nextAttentionTick - growthTicksAlive) * 90 - secondsInTick);
+                }
                 break;
             }
             case CHAT_YOUR_KITTEN_GOT_LONELY_AND_RAN_OFF:
@@ -539,12 +721,30 @@ public class KittenPlugin extends Plugin {
 
     @Subscribe
     public void onGameTick(GameTick tick) {
+
         // need to update secondsInTick regularly to keep timers tracking properly... but make sure it's not null (kitten is not out)
         if (growthTickStartTime != null) {
             timeInTick = Duration.between(growthTickStartTime, Instant.now());
+            /* i ended up not using the millisecond version anyway, since checking for growth at 89.5s caused the
+               interface method to run slowly which was more of an issue than it running quickly. */
+            // double secondsInTickWithMs = (double) timeInTick.toMillis() / 1000;
             secondsInTick = Math.toIntExact(timeInTick.getSeconds());
+
+            // check our other methods of growth progress:
+            // a) high population world where your kitten may or not be rendered.  200 players is relatively arbitrary btw
+            // b) you teleported recently and your kitten grew but didn't have overhead text as you were teleporting
+            Duration timeSinceLastLoad = Duration.between(lastLoadingTime, Instant.now());
+            if (secondsInTick >= 89 && client.getPlayers().size() >= 200){
+                checkToProgressGrowthInterfaceMethod();
+            } else if (secondsInTick >= 89 && Math.toIntExact(timeSinceLastLoad.getSeconds()) <= 2){
+                // check if the kitten is ready to grow on teleports.  apparently the kitten will not have overhead text
+                //  if you teleport on the same tick as when it grows.  by the way you need to check if there was a
+                //  recent teleport, client.getGameState() = GameState.LOADING doesn't work all the time.
+                checkToProgressGrowthInterfaceMethod();
+            }
         }
 
+        checkifDuplicateGrowthTicks();
         // Send notification on 1 minute before kitten runs away (attention)
         long timeBeforeNeedingAttention = getTimeBeforeNeedingAttention();
         if (!attentionNotificationSend && timeBeforeNeedingAttention != 0 && timeBeforeNeedingAttention < ATTENTION_TIME_ONE_MINUTE_WARNING_MS) {
@@ -594,7 +794,7 @@ public class KittenPlugin extends Plugin {
                 followerKind = FollowerKind.NORMAL_CAT;
                 // commenting this out - this is also called with onVarbitChanged, which will be called when cat grows up
                 // checkForNewFollower();
-                /* this should be 120 at this point anyway, but this is a band-aid covering up a different issue...
+                /* growthTicksAlive should be 120 at this point anyway, but this is a band-aid covering up a different issue...
                 previousFollowerID is set to followerID in checkForNewFollower() immediately before calling
                 newFollower(), where it checks if previousFollowerID == followerID... so it's always true.  so the plugin
                 ALWAYS thinks you have the same kitten/cat as last time even if that's not true.  the kitten has other
@@ -671,12 +871,30 @@ public class KittenPlugin extends Plugin {
                     // ticks alive is accurate.  don't adjust it, it's tracking as it should.
                     return;
                 } else {
+
                     double dialogMinutes = ticksAliveInDialog * 1.5;
                     double inaccurateMinutes = growthTicksAlive * 1.5;
                     log.debug("Kitten's growth ticks alive is NOT accurate: adjusting from " + growthTicksAlive +
                             " to " + ticksAliveInDialog + " ticks alive. ("  + inaccurateMinutes + " to " +
                             dialogMinutes + " min.)");
                     growthTicksAlive = ticksAliveInDialog;
+
+                    /* update attn/growth to minimum values if we know they are inaccurate from new kitten growth time.
+                    for example, in the case of turning in a cat on mobile, and then you got a new kitten that
+                    is the same color (same follower ID), nextHungryTick and nextAttentionTick will not have been reset.
+                    if attention required tick OR hunger required tick is too far away to be possible, reset
+                    BOTH to the given values upon getting a new kitten so the user doesn't think they're good to go
+                    for like 2.5h or whatever.  if one is inaccurate, the other will be too.  these will update
+                    accordingly once the user feeds/plays with kitten, or in-game notifications warn of hunger/attention.
+                    Need to do this before updating timer values, so it displays properly during first shown growth tick
+                     */
+                    if (nextAttentionTick - growthTicksAlive > TICKS_TO_ATTENTION_RUN_AWAY_BALL_OF_WOOL ||
+                            nextHungryTick - growthTicksAlive > TICKS_TO_HUNGER_RUN_AWAY) {
+
+                        nextAttentionTick = TICKS_TO_ATTENTION_RUN_AWAY_MULTIPLE_STROKES;
+                        nextHungryTick = TICKS_TO_HUNGER_RUN_AWAY;
+                    }
+
                     /* note: this will not give you the age in a round increment.  it should give you the exact growth
                     progress that your kitten has.  even though the overall age was incorrect, the progress within the
                     tick is still being accurately tracked, and we will use that here.
@@ -690,21 +908,6 @@ public class KittenPlugin extends Plugin {
                         addKittenGrowthBox((TICKS_TO_ADULTHOOD - growthTicksAlive) * 90 - secondsInTick);
                         addAttentionTimer((nextAttentionTick - growthTicksAlive) * 90 - secondsInTick);
                         addHungryTimer((nextHungryTick - growthTicksAlive) * 90 - secondsInTick);
-                    }
-
-                    /* update attn/growth to minimum values if we know they are inaccurate from new kitten growth time.
-                    for example, in the case of turning in a cat on mobile, and then you got a new kitten that
-                    is the same color (same follower ID), nextHungryTick and nextAttentionTick will not have been reset.
-                    if attention required tick OR hunger required tick is too far away to be possible, reset
-                    BOTH to the given values upon getting a new kitten so the user doesn't think they're good to go
-                    for like 2.5h or whatever.  if one is inaccurate, the other will be too.  these will update
-                    accordingly once the user feeds/plays with kitten, or in-game notifications warn of hunger/attention.
-                     */
-                    if (nextAttentionTick - growthTicksAlive > TICKS_TO_ATTENTION_RUN_AWAY_BALL_OF_WOOL ||
-                            nextHungryTick - growthTicksAlive > TICKS_TO_HUNGER_RUN_AWAY) {
-
-                        nextAttentionTick = TICKS_TO_ATTENTION_RUN_AWAY_MULTIPLE_STROKES;
-                        nextHungryTick = TICKS_TO_HUNGER_RUN_AWAY;
                     }
                 }
             }
@@ -725,7 +928,6 @@ public class KittenPlugin extends Plugin {
             }
         }
     }
-
     @Subscribe
     private void onConfigChanged(ConfigChanged event) {
         if (!event.getGroup().equals("kittenConfig")) {
@@ -791,6 +993,7 @@ public class KittenPlugin extends Plugin {
         }
     }
 
+
     /*
     // 2023-01-24
     // Commenting this out for now until a better assessment can be made if it is needed or not.
@@ -845,9 +1048,11 @@ public class KittenPlugin extends Plugin {
     public void onGameStateChanged(GameStateChanged event) {
         GameState state = event.getGameState();
         switch (state) {
+
             case LOGGING_IN:
-                growthTickStartTime = Instant.now();
             case HOPPING:
+                noGrowthSinceLoggedIn = true;
+                // this doesn't need to break here, and really I want both logging in & hopping to set this to true.
             case CONNECTION_LOST: // CHECK: this may be a condition causing the timer not to stop when the window is closed
                 ready = true;
                 break;
@@ -859,6 +1064,9 @@ public class KittenPlugin extends Plugin {
             case LOGIN_SCREEN:
                 byeFollower();
                 break;
+            case LOADING:
+                lastLoadingTime = Instant.now();
+
         }
     }
 
@@ -876,16 +1084,22 @@ public class KittenPlugin extends Plugin {
             return 0L;
         }
         if (isKitten()) {
-            // `cull` returns true if timer is less than or equal to zero
-            // This will keep the timer from going negative
-            if (growthTimer.cull()) {
-                return 0L;
+            long ret;
+            timeInTick = Duration.between(growthTickStartTime, Instant.now());
+            int secondsInTick = Math.toIntExact(timeInTick.getSeconds());
+            if (secondsInTick > 90) {
+                // paused at the end of the tick, but it hasn't progressed yet (player is in menus)
+                ret = (long) (TICKS_TO_ADULTHOOD - growthTicksAlive - 1) * 90 * 1000;
+                if (ret < 0){
+                    return 0L;
+                } else {
+                    return ret;
+                }
             } else {
-                timeInTick = Duration.between(growthTickStartTime, Instant.now());
-                int secondsInTick = Math.toIntExact(timeInTick.getSeconds());
-                if (secondsInTick >= 90) {
-                    // paused at the end of the tick, but it hasn't progressed yet (player is in menus)
-                    return (long) (TICKS_TO_ADULTHOOD - growthTicksAlive - 1) * 90 * 1000;
+                // `cull` returns true if timer is less than or equal to zero
+                // This will keep the timer from going negative
+                if (growthTimer.cull()) {
+                    return 0L;
                 } else {
                     return Math.abs(growthTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
                 }
@@ -933,19 +1147,19 @@ public class KittenPlugin extends Plugin {
             return 0L;
         }
         if (isKitten()) {
-            // `cull` returns true if timer is less than or equal to zero
-            // This will keep the timer from going negative
-            if (kittenHungryTimer.cull()) {
-                return 0L;
+            if (secondsInTick >= 90) {
+                // paused at the end of the tick, but it hasn't progressed yet (player is in menus)
+                long ret = (long) (nextHungryTick - growthTicksAlive - 1) * 90 * 1000;
+                if (ret < 0){
+                    return 0L;
+                } else {
+                    return ret;
+                }
             } else {
-                if (secondsInTick >= 90) {
-                    // paused at the end of the tick, but it hasn't progressed yet (player is in menus)
-                    long ret = (long) (nextHungryTick - growthTicksAlive - 1) * 90 * 1000;
-                    if (ret < 0){
-                        return 0L;
-                    } else {
-                        return ret;
-                    }
+                // `cull` returns true if timer is less than or equal to zero
+                // This will keep the timer from going negative
+                if (kittenHungryTimer.cull()) {
+                    return 0L;
                 } else {
                     return Math.abs(kittenHungryTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
                 }
@@ -959,90 +1173,24 @@ public class KittenPlugin extends Plugin {
             return 0L;
         }
         if (isKitten()) {
-            // `cull` returns true if timer is less than or equal to zero
-            // This will keep the timer from going negative
-            if (kittenAttentionTimer.cull()) {
-                return 0L;
+            if (secondsInTick >= 90) {
+                // paused at the end of the tick, but it hasn't progressed yet (player is in menus)
+                long ret = (long) (nextAttentionTick - growthTicksAlive - 1) * 90 * 1000;
+                if (ret < 0){
+                    return 0L;
+                } else {
+                    return ret;
+                }
             } else {
-                if (secondsInTick >= 90) {
-                    // paused at the end of the tick, but it hasn't progressed yet (player is in menus)
-                    long ret = (long) (nextAttentionTick - growthTicksAlive - 1) * 90 * 1000;
-                    if (ret < 0){
-                        return 0L;
-                    } else {
-                        return ret;
-                    }
+                // `cull` returns true if timer is less than or equal to zero
+                // This will keep the timer from going negative
+                if (kittenAttentionTimer.cull()) {
+                    return  0L;
                 } else {
                     return Math.abs(kittenAttentionTimer.getEndTime().until(Instant.now(), ChronoUnit.MILLIS));
                 }
-
             }
-        } else {
-            return 0L;
         }
+        return 0L;
     }
 }
-/*
-KITTEN GROWTH MECHANICS:
-- Kitten grows one growth tick every 90s.
-  - Upon reaching 90s, this growth tick does not progress if the player is in an interface (dialog, bank menu, etc.).
-    - It will progress immediately after exiting that interface, as long as the kitten has a chance to grow
-      (ex: growth does not progress if player AFKs to logout in a bank interface)
-    - If you are only in an interface during a different time of that tick progress (ex: banking during seconds 40-70 of
-      the 90s tick), the kitten's growth will be unaffected by you being in that interface, as long as you're not in an
-      interface at 90s.
-  - The kitten's progress within that 90s tick gets reset each time it is picked up, or when the player logs out/hops worlds.
-- Kitten has overhead text each and every time it grows a growth tick, so as our as the timer ticks down,
-   it waits for that overhead text before continuing to the next growth tick.  This is a much easier "catch-all" than
-   checking for every kind of interface and hoping we don't miss any.
-- Kitten can only request hunger/attention at the time when a growth tick progresses
-DIALOG BOX TO CHECK AGE:
-- Kitten's age in dialogue is not exact in minutes as shown in the dialog box.
-  - As the kitten can only grow in increments of 90s, half of the ages shown in dialog is truncated.
-  - Ex: If the dialog says your kitten is 1 minute old, it is really 1.5 minutes old.
-    There is no dialog that will ever say it is 2 mins old - the increments shown to the player are
-    0 minutes (0 growth ticks), 1 minute (1 growth tick, actually 1.5 mins), 3 minutes (2 growth ticks), 4 minutes
-    (3 growth ticks, actually 4.5 mins), and so on.
-  - The kitten has already progressed time inside of that growth tick when asked, so that time given is not exact either.
-ATTENTION TIMER:
-- Kitten's attention requests (and run away time) are not 7 mins apart as shown on the wiki and previously in this plugin.
-  - They are *supposed* to be 4.5 mins apart, but these can be delayed by a hunger notification which seems to always take
-    precedence.  (As hunger notifications always take precedence, hunger notifications are always consistent no matter
-    what in my testing.)
-     - Attn notifications can also be pushed back by upcoming hunger notifications, and not even ones that would coincide
-       with the attn time...  For example:  Kitten would normally request attn at 22.5 min if well-fed upon first
-       getting it (feed at 15 min, so you won't get another hunger notification until 39 mins).  However, if you don't feed
-       it, it requests hunger at 24 minutes, and then attention at 25.5m, pushing the attn notification back by a full 2 ticks.
-       If you let it go hungry, and it requests food a second time at 27 mins, the attn notification gets pushed back
-       again.  As the last attn req was at 25.5m, you'd expect it to have the lonely notification at 25.5m+4.5m=30m.
-       But it does not do that, it requests that it is lonely at 31.5m instead.  The request that occurred a full 2 ticks
-       before the lonely notification *should* have come still pushes the lonely notification back by a tick.
-       If this is hard to understand in text form, here's a visual representation, which I recommend looking at regardless
-       of whether the text explanation made sense to you:  https://i.imgur.com/6PFRJqB.png  You can easily replicate
-       these results yourself as well.
-  - So if you keep your cat well-fed and never get notified of hunger, these notifications are consistently 4.5 mins apart.
-- Single-stroke mechanics add a variable time to the kitten running away.  It seems as if the more lonely your cat is
-  (closer to running away), the less time a single stroke will add to its attention timer.  I've had single strokes last
-  18m before requesting attn, and I've had it wait as little at 7.5m before requesting attn.  It's also possible these
-  are getting shoved around by hunger notifications as I wasn't aware of that mechanic at the time, so I wasn't tracking it.
-  - A few data points I've gathered (ignoring hunger mechanics, as the kitten was well-fed during these times):
-     - Kitten is 1.5m from running away.
-        - Single stroke now takes 7.5m to request attention again (16.5m from running away)
-     - Kitten is 30m from running away (6m after double stroke).
-        - Single stroke now takes 21m to request attention again (30m from running away)
-     - Kitten is 31.5m from running away (4.5m after double stroke).
-        - Single stroke gives full amount of 22.5m to request attention again.
-     - I believe this can all be interpolated linearly, with it maxing out at 22.5 minutes until the next attention request.
-       Some testing (not very extensive) has shown this to be true so far.
-        - Formula would be:  Time until run away after stroked = Time until run away just before stroked + 15 mins,
-          maxing out at 22.5 mins.
-- Attention given for 2 or more strokes is always consistent at 22.5 mins (barring hunger notifications delaying it).
-- THE ONLY CHANGES I MADE IN THIS REVISION REGARDING ATTENTION are changing the request timers to 4.5 mins apart,
-  as well as changing double stroke to 22.5 mins until attention request (31.5 mins until run away).  I have
-  NOT changed anything further in the plugin as it would require further testing/research to know why timers get
-  delayed/why single stroke attention behaves as it does. I just wanted to include those notes as in case someone else
-  wants to take my research/notes and go further with it.
-- First Two Weeks, 8/xx/23, you can reach me on discord at firsttwoweeks if you want further clarification or to bounce
-ideas off of me for the attention stuff.  Personally I've grown over ~160 kittens on my new account, so I might be done for
-now, but I wanted to leave these notes here so that whoever else can take my notes and go further with it.
- */
