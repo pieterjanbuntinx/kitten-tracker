@@ -493,7 +493,7 @@ public class KittenPlugin extends Plugin {
         will likely freeze for a few seconds at the end of the current growth tick upon returning to a low-population
         area, if you spent a long time in a high population area.  This is better than the alternative - if it moves
         too quickly it will likely freeze for a full growth tick upon returning to the other method.
-        (Instead of advancing after secondsInTick >=89, I tried 89.5s, but that was too quick.)
+        (Instead of advancing after secondsInTick >=89, I tried 88.5s, but that was too quick.)
          */
         HashTable<WidgetNode> componentTable = client.getComponentTable();
         boolean stallingInterfaceOpen = false;
