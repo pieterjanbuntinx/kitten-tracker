@@ -23,6 +23,6 @@ public enum KittenAttentionType {
     }
 
     int getTimeBeforeKittenRunsAway() {
-        return attentionTime + KittenPlugin.ATTENTION_TIME_FROM_WARNING_TO_RUNNING_AWAY_IN_SECONDS;
+        return attentionTime + KittenPlugin.ATTENTION_FIRST_WARNING_TIME_LEFT_IN_SECONDS;
     }
 }
