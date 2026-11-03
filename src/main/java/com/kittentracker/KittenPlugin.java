@@ -178,7 +178,7 @@ public class KittenPlugin extends Plugin {
 			InterfaceID.EQUIPMENT,
             InterfaceID.CA_OVERVIEW, InterfaceID.CA_TASKS,
             InterfaceID.CA_BOSSES, InterfaceID.CA_REWARDS, InterfaceID.CRM_SURPRISEPOPUP_SIDE,
-            InterfaceID.DISPLAYNAME, // believe it or not this does pause kitten growth
+            InterfaceID.DISPLAYNAME_MENU, // believe it or not this does pause kitten growth
 			InterfaceID.FAVOUR_KEYRING,
             InterfaceID.BOOKOFSCROLLS,
 			InterfaceID.FORESTRY_KIT_MAIN, InterfaceID.FORESTRY_KIT_SIDE, // forestry main and side simultaneously open
