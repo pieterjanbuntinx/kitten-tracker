@@ -76,6 +76,7 @@ public class KittenPlugin extends Plugin {
     private static final String DIALOG_CAT_GROWN = "Your kitten has grown into a healthy cat that can hunt for itself.";
     private static final String DIALOG_CAT_OVERGROWN = "Your cat has grown into a mighty feline, but it will no longer be able to chase vermin.";
     private static final String DIALOG_AFTER_TAKING_A_GOOD_LOOK = "After taking a good look at your kitten you guess that its age is: ";
+    private static final String DIALOG_AGE_OF_YOUR_KITTEN = "Age of your kitten: ";
     private static final String DIALOG_HAND_OVER_CAT_CIVILIAN = "You hand over the cat.You are given";
     private static final String DIALOG_GERTRUDE_GIVES_YOU_ANOTHER_KITTEN = "Gertrude gives you another kitten.";
 
@@ -704,6 +705,108 @@ public class KittenPlugin extends Plugin {
         }
     }
 
+    private void calculateKittenAgeFromAgeString(String ageStr) {
+        int hoursIndex = ageStr.indexOf("hours");
+        if (hoursIndex < 0) {
+            hoursIndex = ageStr.indexOf("hour");
+        }
+
+        String hoursStr = "";
+        if (hoursIndex > 0) {
+            hoursStr = ageStr.substring(0, hoursIndex);
+            hoursStr = hoursStr.trim();
+        }
+        int minutesIndex = ageStr.indexOf("minutes");
+        if (minutesIndex < 0) {
+            minutesIndex = ageStr.indexOf("minute");
+        }
+
+        String minutesStr = "";
+        if (minutesIndex > 0) {
+            if (hoursIndex > 0) {
+                minutesStr = ageStr.substring(hoursIndex + "hours".length(), minutesIndex);
+                minutesStr = minutesStr.trim();
+            } else {
+                minutesStr = ageStr.substring(0, minutesIndex);
+                minutesStr = minutesStr.trim();
+            }
+        }
+
+        int hours = 0;
+        int minutes = 0;
+        if (StringUtils.isNotEmpty(hoursStr)) {
+            try {
+                hours = Integer.parseInt(hoursStr);
+            } catch (NumberFormatException ex) {
+                log.debug(ex.getMessage());
+            }
+        }
+
+        if (StringUtils.isNotEmpty(minutesStr)) {
+            try {
+                minutes = Integer.parseInt(minutesStr);
+            } catch (NumberFormatException ex) {
+                log.debug(ex.getMessage());
+            }
+        }
+
+        int ageMinutes = (hours * 60) + minutes;
+        int ageSeconds;
+
+        if (ageMinutes / 1.5 != 0) {
+            // unit given is not an exact number, they truncated it.  add 30s to timer
+            ageSeconds = ageMinutes * 60 + 30;
+        } else {
+            // unit given is an exact number
+            ageSeconds = ageMinutes * 60;
+        }
+
+        int ticksAliveInDialog = (int) ageSeconds / 90;
+        if (ticksAliveInDialog == growthTicksAlive) {
+            // ticks alive is accurate.  don't adjust it, it's tracking as it should.
+            return;
+        } else {
+
+            double dialogMinutes = ticksAliveInDialog * 1.5;
+            double inaccurateMinutes = growthTicksAlive * 1.5;
+            log.debug("Kitten's growth ticks alive is NOT accurate: adjusting from " + growthTicksAlive +
+                      " to " + ticksAliveInDialog + " ticks alive. ("  + inaccurateMinutes + " to " +
+                      dialogMinutes + " min.)");
+            growthTicksAlive = ticksAliveInDialog;
+
+            /* update attn/growth to minimum values if we know they are inaccurate from new kitten growth time.
+               for example, in the case of turning in a cat on mobile, and then you got a new kitten that
+               is the same color (same follower ID), nextHungryTick and nextAttentionTick will not have been reset.
+               if attention required tick OR hunger required tick is too far away to be possible, reset
+               BOTH to the given values upon getting a new kitten so the user doesn't think they're good to go
+               for like 2.5h or whatever.  if one is inaccurate, the other will be too.  these will update
+               accordingly once the user feeds/plays with kitten, or in-game notifications warn of hunger/attention.
+               Need to do this before updating timer values, so it displays properly during first shown growth tick
+            */
+            if (nextAttentionTick - growthTicksAlive > TICKS_TO_ATTENTION_RUN_AWAY_BALL_OF_WOOL ||
+                nextHungryTick - growthTicksAlive > TICKS_TO_HUNGER_RUN_AWAY) {
+
+                nextAttentionTick = TICKS_TO_ATTENTION_RUN_AWAY_MULTIPLE_STROKES;
+                nextHungryTick = TICKS_TO_HUNGER_RUN_AWAY;
+            }
+
+            /* note: this will not give you the age in a round increment.  it should give you the exact growth
+               progress that your kitten has.  even though the overall age was incorrect, the progress within the
+               tick is still being accurately tracked, and we will use that here.
+            */
+            if (secondsInTick >= 90) {
+                // don't overshoot growth progress if progress paused because you're in the dialog menu
+                addKittenGrowthBox((TICKS_TO_ADULTHOOD - growthTicksAlive - 1) * 90);
+                addAttentionTimer((nextAttentionTick - growthTicksAlive - 1) * 90);
+                addHungryTimer((nextHungryTick - growthTicksAlive - 1) * 90);
+            } else {
+                addKittenGrowthBox((TICKS_TO_ADULTHOOD - growthTicksAlive) * 90 - secondsInTick);
+                addAttentionTimer((nextAttentionTick - growthTicksAlive) * 90 - secondsInTick);
+                addHungryTimer((nextHungryTick - growthTicksAlive) * 90 - secondsInTick);
+            }
+        }
+    }
+
     @Subscribe
     public void onGameTick(GameTick tick) {
 
@@ -796,105 +899,12 @@ public class KittenPlugin extends Plugin {
                 String ageStr = notificationText.substring(DIALOG_AFTER_TAKING_A_GOOD_LOOK.length());
                 int end = ageStr.indexOf("And approximate time until");
                 ageStr = ageStr.substring(0, end);
-                int hoursIndex = ageStr.indexOf("hours");
-                if (hoursIndex < 0) {
-                    hoursIndex = ageStr.indexOf("hour");
-                }
-
-                String hoursStr = "";
-                if (hoursIndex > 0) {
-                    hoursStr = ageStr.substring(0, hoursIndex);
-                    hoursStr = hoursStr.trim();
-                }
-                int minutesIndex = ageStr.indexOf("minutes");
-                if (minutesIndex < 0) {
-                    minutesIndex = ageStr.indexOf("minute");
-                }
-
-                String minutesStr = "";
-                if (minutesIndex > 0) {
-                    if (hoursIndex > 0) {
-                        minutesStr = ageStr.substring(hoursIndex + "hours".length(), minutesIndex);
-                        minutesStr = minutesStr.trim();
-                    } else {
-                        minutesStr = ageStr.substring(0, minutesIndex);
-                        minutesStr = minutesStr.trim();
-                    }
-                }
-
-                int hours = 0;
-                int minutes = 0;
-                if (StringUtils.isNotEmpty(hoursStr)) {
-                    try {
-                        hours = Integer.parseInt(hoursStr);
-                    } catch (NumberFormatException ex) {
-                        log.debug(ex.getMessage());
-                    }
-                }
-
-                if (StringUtils.isNotEmpty(minutesStr)) {
-                    try {
-                        minutes = Integer.parseInt(minutesStr);
-                    } catch (NumberFormatException ex) {
-                        log.debug(ex.getMessage());
-                    }
-                }
-
-                int ageMinutes = (hours * 60) + minutes;
-                int ageSeconds;
-
-                if (ageMinutes / 1.5 != 0) {
-                    // unit given is not an exact number, they truncated it.  add 30s to timer
-                    ageSeconds = ageMinutes * 60 + 30;
-                } else {
-                    // unit given is an exact number
-                    ageSeconds = ageMinutes * 60;
-                }
-
-                int ticksAliveInDialog = (int) ageSeconds / 90;
-                if (ticksAliveInDialog == growthTicksAlive) {
-                    // ticks alive is accurate.  don't adjust it, it's tracking as it should.
-                    return;
-                } else {
-
-                    double dialogMinutes = ticksAliveInDialog * 1.5;
-                    double inaccurateMinutes = growthTicksAlive * 1.5;
-                    log.debug("Kitten's growth ticks alive is NOT accurate: adjusting from " + growthTicksAlive +
-                            " to " + ticksAliveInDialog + " ticks alive. ("  + inaccurateMinutes + " to " +
-                            dialogMinutes + " min.)");
-                    growthTicksAlive = ticksAliveInDialog;
-
-                    /* update attn/growth to minimum values if we know they are inaccurate from new kitten growth time.
-                    for example, in the case of turning in a cat on mobile, and then you got a new kitten that
-                    is the same color (same follower ID), nextHungryTick and nextAttentionTick will not have been reset.
-                    if attention required tick OR hunger required tick is too far away to be possible, reset
-                    BOTH to the given values upon getting a new kitten so the user doesn't think they're good to go
-                    for like 2.5h or whatever.  if one is inaccurate, the other will be too.  these will update
-                    accordingly once the user feeds/plays with kitten, or in-game notifications warn of hunger/attention.
-                    Need to do this before updating timer values, so it displays properly during first shown growth tick
-                     */
-                    if (nextAttentionTick - growthTicksAlive > TICKS_TO_ATTENTION_RUN_AWAY_BALL_OF_WOOL ||
-                            nextHungryTick - growthTicksAlive > TICKS_TO_HUNGER_RUN_AWAY) {
-
-                        nextAttentionTick = TICKS_TO_ATTENTION_RUN_AWAY_MULTIPLE_STROKES;
-                        nextHungryTick = TICKS_TO_HUNGER_RUN_AWAY;
-                    }
-
-                    /* note: this will not give you the age in a round increment.  it should give you the exact growth
-                    progress that your kitten has.  even though the overall age was incorrect, the progress within the
-                    tick is still being accurately tracked, and we will use that here.
-                     */
-                    if (secondsInTick >= 90) {
-                        // don't overshoot growth progress if progress paused because you're in the dialog menu
-                        addKittenGrowthBox((TICKS_TO_ADULTHOOD - growthTicksAlive - 1) * 90);
-                        addAttentionTimer((nextAttentionTick - growthTicksAlive - 1) * 90);
-                        addHungryTimer((nextHungryTick - growthTicksAlive - 1) * 90);
-                    } else {
-                        addKittenGrowthBox((TICKS_TO_ADULTHOOD - growthTicksAlive) * 90 - secondsInTick);
-                        addAttentionTimer((nextAttentionTick - growthTicksAlive) * 90 - secondsInTick);
-                        addHungryTimer((nextHungryTick - growthTicksAlive) * 90 - secondsInTick);
-                    }
-                }
+                calculateKittenAgeFromAgeString(ageStr);
+            } else if (notificationText.startsWith(DIALOG_AGE_OF_YOUR_KITTEN)) {
+                String ageStr = notificationText.substring(DIALOG_AGE_OF_YOUR_KITTEN.length());
+                int end = ageStr.indexOf("Approximate time until");
+                ageStr = ageStr.substring(0, end);
+                calculateKittenAgeFromAgeString(ageStr);
             }
         }
         Widget dialog = client.getWidget(InterfaceID.OBJECTBOX, 2);
